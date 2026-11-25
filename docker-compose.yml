@@ -1,0 +1,81 @@
+# CivicBridge AI - local infrastructure
+#
+# Docker is optional for Phase 1 (a native PostgreSQL 17 install is used in
+# development). This compose file reproduces the same topology in containers.
+#
+# NOTE: pgvector and PostGIS images are listed for the intended production
+# topology. The current development environment intentionally runs stock
+# PostgreSQL 17 with pg_trgm + uuid-ossp, and the duplicate-detection agent
+# falls back to Python cosine similarity over embeddings stored in PostgreSQL.
+#
+#   docker compose up -d postgres
+#   docker compose --profile extensions up -d postgres-ai
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: civicbridge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: civicbridge_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-civicbridge_dev_password}
+      POSTGRES_DB: civicbridge
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - civicbridge_pgdata:/var/lib/postgresql/data
+      - ./backend/scripts/init_db.sql:/docker-entrypoint-initdb.d/00_civicbridge_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U civicbridge_app -d civicbridge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Intended production topology: PostgreSQL + pgvector + PostGIS.
+  # Enable with: docker compose --profile extensions up -d postgres-ai
+  postgres-ai:
+    image: postgis/postgis:17-3.5
+    profiles: ["extensions"]
+    container_name: civicbridge-postgres-ai
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: civicbridge_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-civicbridge_dev_password}
+      POSTGRES_DB: civicbridge
+    ports:
+      - "5433:5432"
+    volumes:
+      - civicbridge_pgdata_ai:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U civicbridge_app -d civicbridge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: civicbridge-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: civicbridge_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-civicbridge_dev_password}
+      POSTGRES_DB: civicbridge
+      # Points at the host's Ollama runtime, not a container.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:latest}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+volumes:
+  civicbridge_pgdata:
+  civicbridge_pgdata_ai:
