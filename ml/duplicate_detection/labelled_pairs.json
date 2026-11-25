@@ -1,0 +1,450 @@
+{
+  "name": "CivicBridge offline duplicate-detection benchmark",
+  "description": "Manually labelled complaint pairs used to benchmark the offline TF-IDF + Haversine duplicate detector. Each pair carries a human label ('duplicate' = same physical problem at the same place, 'distinct' = two different problems). Labels were reviewed by hand; the notes state the reasoning. Texts are synthetic.",
+  "labels": {
+    "duplicate": "the two complaints describe the same physical problem at the same place",
+    "distinct": "the two complaints describe different problems (or the same problem at demonstrably different places)"
+  },
+  "pairs": [
+    {
+      "id": "en-dup-01",
+      "language": "en",
+      "label": "duplicate",
+      "note": "Identical wording, identical coordinates.",
+      "subject": {
+        "text": "Garbage has not been collected on our street for five days and the smell is unbearable.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "Garbage has not been collected on our street for five days and the smell is unbearable.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      }
+    },
+    {
+      "id": "en-dup-02",
+      "language": "en",
+      "label": "duplicate",
+      "note": "Second report of the same garbage pile; a trailing sentence was added.",
+      "subject": {
+        "text": "Garbage has not been collected on our street for five days and the smell is unbearable.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "Garbage has not been collected on our street for five days and the smell is unbearable. Reported again by another resident.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.0852,
+        "longitude": 80.2103
+      }
+    },
+    {
+      "id": "en-dup-03",
+      "language": "en",
+      "label": "duplicate",
+      "note": "Same pothole, English spelling drift ('pothole' vs 'pot hole') and hyphenation.",
+      "subject": {
+        "text": "There is a large pothole on the 3rd Cross Street and two-wheelers keep skidding.",
+        "category": "road_maintenance",
+        "ward": "Ward 10",
+        "latitude": 13.0848,
+        "longitude": 80.2098
+      },
+      "candidate": {
+        "text": "There is a large pot hole on the 3rd cross street and two wheelers keep skidding.",
+        "category": "road_maintenance",
+        "ward": "Ward 10",
+        "latitude": 13.0849,
+        "longitude": 80.2099
+      }
+    },
+    {
+      "id": "en-dup-04",
+      "language": "en",
+      "label": "duplicate",
+      "note": "Identical text and NO coordinates on either side: the text-only path must still catch it.",
+      "subject": {
+        "text": "No drinking water supply in our area for three days.",
+        "category": "water_supply",
+        "ward": "Ward 13",
+        "latitude": null,
+        "longitude": null
+      },
+      "candidate": {
+        "text": "No drinking water supply in our area for three days.",
+        "category": "water_supply",
+        "ward": "Ward 13",
+        "latitude": null,
+        "longitude": null
+      }
+    },
+    {
+      "id": "en-dup-05",
+      "language": "en",
+      "label": "duplicate",
+      "note": "Only one side has coordinates; the missing coordinate must not disqualify the pair.",
+      "subject": {
+        "text": "The street lights on our road are not working and the road is dark at night.",
+        "category": "street_lighting",
+        "ward": "Ward 13",
+        "latitude": 13.0401,
+        "longitude": 80.2331
+      },
+      "candidate": {
+        "text": "The street lights on our road are not working and it is completely dark at night.",
+        "category": "street_lighting",
+        "ward": "Ward 13",
+        "latitude": null,
+        "longitude": null
+      }
+    },
+    {
+      "id": "en-dup-06",
+      "language": "en",
+      "label": "duplicate",
+      "note": "Overflowing bin vs uncleared bin, same bus stop, same coordinates.",
+      "subject": {
+        "text": "The waste bin near the bus stop is overflowing and has not been cleared for a week.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.0855,
+        "longitude": 80.2105
+      },
+      "candidate": {
+        "text": "Garbage bin near the bus stop is overflowing, not cleared for seven days.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.0854,
+        "longitude": 80.2104
+      }
+    },
+    {
+      "id": "en-dup-07",
+      "language": "en",
+      "label": "duplicate",
+      "note": "Word insertion ('the past') only.",
+      "subject": {
+        "text": "Garbage has not been collected near our street for five days.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "Garbage has not been collected near our street for the past five days.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      }
+    },
+    {
+      "id": "en-dup-08",
+      "language": "en",
+      "label": "duplicate",
+      "note": "Same street light, 'several days' vs 'many days'.",
+      "subject": {
+        "text": "The street light near the temple has not been working for several days.",
+        "category": "street_lighting",
+        "ward": "Ward 32",
+        "latitude": 12.979,
+        "longitude": 80.221
+      },
+      "candidate": {
+        "text": "Street light near the temple has not been working for many days.",
+        "category": "street_lighting",
+        "ward": "Ward 32",
+        "latitude": 12.9791,
+        "longitude": 80.2211
+      }
+    },
+    {
+      "id": "ta-dup-01",
+      "language": "ta",
+      "label": "duplicate",
+      "note": "Identical Tamil-script text and coordinates.",
+      "subject": {
+        "text": "எங்கள் தெருவில் ஐந்து நாட்களாக குப்பை அள்ளப்படவில்லை. துர்நாற்றம் பரவுகிறது.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "எங்கள் தெருவில் ஐந்து நாட்களாக குப்பை அள்ளப்படவில்லை. துர்நாற்றம் பரவுகிறது.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      }
+    },
+    {
+      "id": "ta-dup-02",
+      "language": "ta",
+      "label": "duplicate",
+      "note": "Tamil script, whitespace split inside a word ('வரவில்லை' vs 'வர வில்லை').",
+      "subject": {
+        "text": "எங்கள் தெருவில் தண்ணீர் வரவில்லை.",
+        "category": "water_supply",
+        "ward": "Ward 13",
+        "latitude": 13.04,
+        "longitude": 80.233
+      },
+      "candidate": {
+        "text": "எங்கள் தெருவில் தண்ணீர் வர வில்லை.",
+        "category": "water_supply",
+        "ward": "Ward 13",
+        "latitude": 13.04,
+        "longitude": 80.233
+      }
+    },
+    {
+      "id": "ta-dup-03",
+      "language": "ta",
+      "label": "duplicate",
+      "note": "Tamil road pothole reported twice with punctuation variation.",
+      "subject": {
+        "text": "அண்ணா நகர் சாலையில் பெரிய பள்ளம் உள்ளது, விபத்து நடக்கும்.",
+        "category": "road_maintenance",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "அண்ணா நகர் சாலையில் பெரிய பள்ளம் உள்ளது. விபத்து நடக்கும்.",
+        "category": "road_maintenance",
+        "ward": "Ward 10",
+        "latitude": 13.0851,
+        "longitude": 80.2101
+      }
+    },
+    {
+      "id": "ta-latn-dup-01",
+      "language": "ta-latn",
+      "label": "duplicate",
+      "note": "Transliterated Tamil, spelling drift ('aindhu'/'aindhu', 'allapadavillai'/'alla padavillai').",
+      "subject": {
+        "text": "Engal theruvil aindhu naatkalaga kuppai allapadavillai.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "Enga theruvil aindhu naatkal kuppai alla padavillai.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      }
+    },
+    {
+      "id": "ta-latn-dup-02",
+      "language": "ta-latn",
+      "label": "duplicate",
+      "note": "Transliterated Tamil water complaint, no coordinates, minor word ending drift.",
+      "subject": {
+        "text": "Kudineer viniyogam illai moonru naatkalaga.",
+        "category": "water_supply",
+        "ward": "Ward 13",
+        "latitude": null,
+        "longitude": null
+      },
+      "candidate": {
+        "text": "Kudineer viniyogam illa moonru naatkal.",
+        "category": "water_supply",
+        "ward": "Ward 13",
+        "latitude": null,
+        "longitude": null
+      }
+    },
+    {
+      "id": "en-dist-01",
+      "language": "en",
+      "label": "distinct",
+      "note": "Different categories (waste vs water) at the same place; the category guard must keep this out.",
+      "subject": {
+        "text": "Garbage has not been collected on our street for the past five days and it smells terrible.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "There has been no drinking water supply on our street for the past five days.",
+        "category": "water_supply",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      }
+    },
+    {
+      "id": "en-dist-02",
+      "language": "en",
+      "label": "distinct",
+      "note": "Classic false-positive trap: near-identical wording, but Anna Nagar and Besant Nagar bus stops are ~11 km apart.",
+      "subject": {
+        "text": "A large pothole has formed near the Anna Nagar bus stop.",
+        "category": "road_maintenance",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "A large pothole has formed near the Besant Nagar bus stop.",
+        "category": "road_maintenance",
+        "ward": "Ward 26",
+        "latitude": 13.0,
+        "longitude": 80.27
+      }
+    },
+    {
+      "id": "en-dist-03",
+      "language": "en",
+      "label": "distinct",
+      "note": "Different categories (lighting vs road) and different problems at the same place.",
+      "subject": {
+        "text": "Street lights on our road have not been working for a week.",
+        "category": "street_lighting",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "The road on our street has deep potholes and needs urgent repair.",
+        "category": "road_maintenance",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      }
+    },
+    {
+      "id": "en-dist-04",
+      "language": "en",
+      "label": "distinct",
+      "note": "No coordinates; water outage vs a broken street light are unrelated problems.",
+      "subject": {
+        "text": "No drinking water supply in our area for three days.",
+        "category": "water_supply",
+        "ward": "Ward 13",
+        "latitude": null,
+        "longitude": null
+      },
+      "candidate": {
+        "text": "The street lights near our house are not working.",
+        "category": "street_lighting",
+        "ward": "Ward 13",
+        "latitude": null,
+        "longitude": null
+      }
+    },
+    {
+      "id": "en-dist-05",
+      "language": "en",
+      "label": "distinct",
+      "note": "Same category, different lighting faults at different places (temple vs market).",
+      "subject": {
+        "text": "The street light pole near the temple is damaged.",
+        "category": "street_lighting",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "The stretch near the market has no working lights.",
+        "category": "street_lighting",
+        "ward": "Ward 13",
+        "latitude": 13.04,
+        "longitude": 80.233
+      }
+    },
+    {
+      "id": "en-dist-06",
+      "language": "en",
+      "label": "distinct",
+      "note": "No coordinates; waste piling up vs a broken light at the same landmark are different problems.",
+      "subject": {
+        "text": "Waste is piling up near the school gate.",
+        "category": "waste_management",
+        "ward": "Ward 10",
+        "latitude": null,
+        "longitude": null
+      },
+      "candidate": {
+        "text": "The street light near the school gate is broken.",
+        "category": "street_lighting",
+        "ward": "Ward 10",
+        "latitude": null,
+        "longitude": null
+      }
+    },
+    {
+      "id": "en-dist-07",
+      "language": "en",
+      "label": "distinct",
+      "note": "No coordinates; a shared sentence frame ('a problem in our area') hides two unrelated complaints.",
+      "subject": {
+        "text": "There is a water leakage problem in our area.",
+        "category": "water_supply",
+        "ward": "Ward 13",
+        "latitude": null,
+        "longitude": null
+      },
+      "candidate": {
+        "text": "There is a garbage problem in our area.",
+        "category": "waste_management",
+        "ward": "Ward 13",
+        "latitude": null,
+        "longitude": null
+      }
+    },
+    {
+      "id": "ta-dist-01",
+      "language": "ta",
+      "label": "distinct",
+      "note": "Identical Tamil road wording, but Anna Nagar and Besant Nagar are far apart.",
+      "subject": {
+        "text": "அண்ணா நகர் சாலையில் பெரிய பள்ளம் உள்ளது.",
+        "category": "road_maintenance",
+        "ward": "Ward 10",
+        "latitude": 13.085,
+        "longitude": 80.21
+      },
+      "candidate": {
+        "text": "பெசன்ட் நகர் சாலையில் பெரிய பள்ளம் உள்ளது.",
+        "category": "road_maintenance",
+        "ward": "Ward 26",
+        "latitude": 13.0,
+        "longitude": 80.27
+      }
+    },
+    {
+      "id": "ta-latn-dist-01",
+      "language": "ta-latn",
+      "label": "distinct",
+      "note": "Transliterated Tamil, same place but waste vs water (category guard).",
+      "subject": {
+        "text": "Enga theruvil kuppai allapadavillai.",
+        "category": "waste_management",
+        "ward": "Ward 13",
+        "latitude": 13.04,
+        "longitude": 80.233
+      },
+      "candidate": {
+        "text": "Enga theruvil kudineer viniyogam illai.",
+        "category": "water_supply",
+        "ward": "Ward 13",
+        "latitude": 13.04,
+        "longitude": 80.233
+      }
+    }
+  ]
+}
