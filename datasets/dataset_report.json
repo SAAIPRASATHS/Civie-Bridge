@@ -1,0 +1,165 @@
+{
+  "generated_at": "2026-11-25T06:51:17.609293+00:00",
+  "database": {
+    "name": "civicbridge",
+    "host": "localhost",
+    "port": 5432,
+    "user": "civicbridge_app"
+  },
+  "migration_revision": "0255b8fcf1e2",
+  "table_counts": {
+    "users": 34,
+    "departments": 4,
+    "officers": 8,
+    "complaints": 1050,
+    "complaint_evidence": 0,
+    "complaint_assignments": 0,
+    "complaint_status_history": 1860,
+    "agent_execution_logs": 0,
+    "escalation_records": 0,
+    "service_guidelines": 4
+  },
+  "complaints": {
+    "total": 1050,
+    "by_category": {
+      "waste_management": 317,
+      "road_maintenance": 266,
+      "water_supply": 260,
+      "street_lighting": 207
+    },
+    "by_language": {
+      "en": 627,
+      "ta": 261,
+      "ta-latn": 162
+    },
+    "by_priority": {
+      "medium": 423,
+      "low": 265,
+      "high": 262,
+      "critical": 100
+    },
+    "by_status": {
+      "submitted": 240,
+      "under_review": 180,
+      "assigned": 150,
+      "in_progress": 130,
+      "resolved": 110,
+      "awaiting_clarification": 50,
+      "closed": 50,
+      "escalated": 50,
+      "duplicate": 50,
+      "rejected": 40
+    }
+  },
+  "duplicates": {
+    "total": 50,
+    "similarity_min": "0.822",
+    "similarity_max": "0.987",
+    "examples": [
+      {
+        "duplicate": "CB-2026-001001",
+        "original": "CB-2026-000179",
+        "similarity": 0.869
+      },
+      {
+        "duplicate": "CB-2026-001002",
+        "original": "CB-2026-000964",
+        "similarity": 0.951
+      },
+      {
+        "duplicate": "CB-2026-001003",
+        "original": "CB-2026-000463",
+        "similarity": 0.956
+      },
+      {
+        "duplicate": "CB-2026-001004",
+        "original": "CB-2026-000358",
+        "similarity": 0.929
+      },
+      {
+        "duplicate": "CB-2026-001005",
+        "original": "CB-2026-000413",
+        "similarity": 0.872
+      }
+    ]
+  },
+  "coordinates": {
+    "with_coordinates": 979,
+    "missing": 71,
+    "coverage_pct": 93.24
+  },
+  "reference_data": {
+    "departments": 4,
+    "service_guidelines": 4,
+    "department_provenance": "Prototype directory authored for CivicBridge AI. Illustrative municipal units only - not a verified real government assignment.",
+    "guideline_provenance": "Prototype assumption for CivicBridge AI. SLA durations are configurable placeholders - not an officially published service rule."
+  },
+  "checks": [
+    {
+      "name": "All 10 tables exist in PostgreSQL",
+      "passed": true,
+      "detail": "10/10 present"
+    },
+    {
+      "name": "Alembic migration applied",
+      "passed": true,
+      "detail": "revision=0255b8fcf1e2"
+    },
+    {
+      "name": "Dataset size >= 1000 complaints",
+      "passed": true,
+      "detail": "complaints=1050"
+    },
+    {
+      "name": "All 4 categories present",
+      "passed": true,
+      "detail": "categories=road_maintenance, street_lighting, waste_management, water_supply"
+    },
+    {
+      "name": "All 3 languages present (en, ta, ta-latn)",
+      "passed": true,
+      "detail": "languages=en, ta, ta-latn"
+    },
+    {
+      "name": "Planted duplicates present and resolvable",
+      "passed": true,
+      "detail": "duplicates=50 orphaned=0 self_referential=0"
+    },
+    {
+      "name": "Missing coordinates handled (both columns NULL together)",
+      "passed": true,
+      "detail": "without_location=71 half_pairs=0"
+    },
+    {
+      "name": "No invalid coordinates stored",
+      "passed": true,
+      "detail": "out_of_range=0"
+    },
+    {
+      "name": "Status values are all controlled vocabulary",
+      "passed": true,
+      "detail": "distinct_statuses=10"
+    },
+    {
+      "name": "Priority values are all controlled vocabulary",
+      "passed": true,
+      "detail": "distinct_priorities=4"
+    },
+    {
+      "name": "Foreign key relationships resolve",
+      "passed": true,
+      "detail": "checked=5 relationships | violations=0"
+    },
+    {
+      "name": "Every department is labelled prototype data",
+      "passed": true,
+      "detail": "prototype=4/4"
+    },
+    {
+      "name": "No service guideline claims official verification",
+      "passed": true,
+      "detail": "unverified=4/4"
+    }
+  ],
+  "all_checks_passed": true
+}
