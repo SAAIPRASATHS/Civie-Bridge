@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "civicbridge-backend"
+version = "0.1.0"
+description = "CivicBridge AI backend - autonomous multi-agent citizen grievance resolution"
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["app"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "C4", "UP", "SIM", "RUF"]
+# E501 is enforced by the formatter's line-length instead of the linter.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Standalone scripts and tests prepend the backend directory to sys.path before
+# importing application modules, which necessarily precedes those imports.
+"../agents/*.py" = ["E402"]
+"../tests/*.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["../tests"]
+pythonpath = ["."]
+addopts = "-ra"
