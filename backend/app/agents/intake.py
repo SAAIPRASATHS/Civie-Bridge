@@ -37,6 +37,7 @@ from app.agents.extraction import (
     extract_location_phrase,
     extract_ward,
     grounding_ratio,
+    has_tamil_script,
     is_grounded,
     location_is_specific,
     normalise,
@@ -121,6 +122,24 @@ class _IntakeDraft(BaseModel):
             raise ValueError("expected an array of strings")
         return coerced
 
+    @field_validator("problem_type", mode="before")
+    @classmethod
+    def _repair_problem_type(cls, value: Any) -> Any:
+        """Repair a list where a single label is expected.
+
+        ``llama3.1`` answers this scalar field with ``["streetlight"]`` (or
+        ``["Public Health", "Sanitation"]``) often enough that rejecting it
+        would throw away an otherwise good response. A list of labels is joined
+        into one; a genuinely unrepairable type still fails validation, so the
+        repair-then-fallback path is preserved.
+        """
+        if value is None or isinstance(value, str):
+            return value
+        if isinstance(value, (list, tuple)):
+            labels = [item.strip() for item in value if isinstance(item, str) and item.strip()]
+            return ", ".join(labels) or None
+        return value
+
 
 def _build_user_prompt(text: str) -> str:
     return (
@@ -165,7 +184,16 @@ def _restatement_is_grounded(restatement: str, source: str, duration_days: float
         return False
 
     phrase = extract_location_phrase(restatement)
-    return not phrase or grounding_ratio(phrase, source) >= 0.4
+    if not phrase:
+        return True
+    # A Tamil-to-English restatement cannot be compared token by token: an
+    # English place name never matches the Tamil source, so demanding a
+    # grounding ratio here would discard every faithful translation and leave
+    # the description in Tamil. The numeric check above is script-neutral and
+    # still applies, as does the separate grounding check on the location field.
+    if has_tamil_script(phrase) != has_tamil_script(source):
+        return True
+    return grounding_ratio(phrase, source) >= 0.4
 
 
 class IntakeAgent:
@@ -281,7 +309,11 @@ class IntakeAgent:
         if draft and draft.location_text and draft.location_text.strip():
             candidate = draft.location_text.strip()
             if is_grounded(candidate, cleaned):
-                if len(candidate) > len(location_text or ""):
+                # Compare word counts, not characters: the model's "வார்டு 10" is
+                # longer in characters than the canonical "Ward 10" but says the
+                # same thing, so a character comparison displaces the
+                # deterministic form for no gain.
+                if len(candidate.split()) > len((location_text or "").split()):
                     location_text = candidate
             else:
                 dropped.append(f"location:{candidate}")
