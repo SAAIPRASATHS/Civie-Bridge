@@ -28,6 +28,12 @@ from app.models import (
     enum_values,
 )
 
+#: Dataset composition is validated over the synthetic corpus only, so a single
+#: in-flight citizen submission (which may legitimately have no category yet)
+#: cannot fail a dataset check. Foreign-key integrity checks stay whole-database,
+#: because a broken reference anywhere is a real defect.
+DATASET_SCOPE = "is_synthetic IS TRUE"
+
 
 @dataclass
 class ValidationCheck:
@@ -85,7 +91,8 @@ def _rows(session: Session, sql: str) -> list[tuple[Any, ...]]:
 def _group_counts(session: Session, column: str) -> dict[str, int]:
     rows = _rows(
         session,
-        f"SELECT {column}::text, count(*) FROM complaints GROUP BY {column} ORDER BY 2 DESC",
+        f"SELECT {column}::text, count(*) FROM complaints "
+        f"WHERE {DATASET_SCOPE} GROUP BY {column} ORDER BY 2 DESC",
     )
     return {str(value): int(count) for value, count in rows}
 
@@ -112,12 +119,12 @@ def _collect_checks(session: Session, counts: dict[str, int]) -> list[Validation
         )
     )
 
-    total = counts.get("complaints", 0)
+    dataset_total = _scalar(session, f"SELECT count(*) FROM complaints WHERE {DATASET_SCOPE}")
     checks.append(
         ValidationCheck(
             "Dataset size >= 1000 complaints",
-            total >= 1000,
-            f"complaints={total}",
+            dataset_total >= 1000,
+            f"complaints={dataset_total}",
         )
     )
 
@@ -142,14 +149,20 @@ def _collect_checks(session: Session, counts: dict[str, int]) -> list[Validation
     )
 
     duplicate_rows = _scalar(
-        session, "SELECT count(*) FROM complaints WHERE duplicate_of_id IS NOT NULL"
+        session,
+        f"SELECT count(*) FROM complaints WHERE duplicate_of_id IS NOT NULL "
+        f"AND {DATASET_SCOPE}",
     )
     orphan_duplicates = _scalar(
         session,
-        "SELECT count(*) FROM complaints c WHERE c.duplicate_of_id IS NOT NULL "
+        f"SELECT count(*) FROM complaints c WHERE c.duplicate_of_id IS NOT NULL "
+        f"AND c.{DATASET_SCOPE} "
         "AND NOT EXISTS (SELECT 1 FROM complaints o WHERE o.id = c.duplicate_of_id)",
     )
-    self_duplicates = _scalar(session, "SELECT count(*) FROM complaints WHERE duplicate_of_id = id")
+    self_duplicates = _scalar(
+        session,
+        f"SELECT count(*) FROM complaints WHERE duplicate_of_id = id AND {DATASET_SCOPE}",
+    )
     checks.append(
         ValidationCheck(
             "Planted duplicates present and resolvable",
@@ -159,11 +172,14 @@ def _collect_checks(session: Session, counts: dict[str, int]) -> list[Validation
     )
 
     missing_coordinates = _scalar(
-        session, "SELECT count(*) FROM complaints WHERE latitude IS NULL AND longitude IS NULL"
+        session,
+        f"SELECT count(*) FROM complaints WHERE latitude IS NULL AND longitude IS NULL "
+        f"AND {DATASET_SCOPE}",
     )
     half_coordinates = _scalar(
         session,
-        "SELECT count(*) FROM complaints WHERE (latitude IS NULL) <> (longitude IS NULL)",
+        f"SELECT count(*) FROM complaints WHERE (latitude IS NULL) <> (longitude IS NULL) "
+        f"AND {DATASET_SCOPE}",
     )
     checks.append(
         ValidationCheck(
@@ -175,9 +191,9 @@ def _collect_checks(session: Session, counts: dict[str, int]) -> list[Validation
 
     invalid_coordinates = _scalar(
         session,
-        "SELECT count(*) FROM complaints WHERE (latitude IS NOT NULL AND "
+        "SELECT count(*) FROM complaints WHERE ((latitude IS NOT NULL AND "
         "(latitude < -90 OR latitude > 90)) OR (longitude IS NOT NULL AND "
-        "(longitude < -180 OR longitude > 180))",
+        f"(longitude < -180 OR longitude > 180))) AND {DATASET_SCOPE}",
     )
     checks.append(
         ValidationCheck(
@@ -269,15 +285,18 @@ def build_report(session: Session) -> DatasetReport:
     by_priority = _group_counts(session, "priority")
     by_status = _group_counts(session, "status")
 
-    total = counts.get("complaints", 0)
+    total = _scalar(session, f"SELECT count(*) FROM complaints WHERE {DATASET_SCOPE}")
     duplicate_sample = _rows(
         session,
         "SELECT c.reference_id, o.reference_id, c.duplicate_similarity "
         "FROM complaints c JOIN complaints o ON o.id = c.duplicate_of_id "
+        f"WHERE c.{DATASET_SCOPE} "
         "ORDER BY c.reference_id LIMIT 5",
     )
     missing_coordinates = _scalar(
-        session, "SELECT count(*) FROM complaints WHERE latitude IS NULL AND longitude IS NULL"
+        session,
+        f"SELECT count(*) FROM complaints WHERE latitude IS NULL AND longitude IS NULL "
+        f"AND {DATASET_SCOPE}",
     )
 
     report = DatasetReport(
@@ -299,15 +318,19 @@ def build_report(session: Session) -> DatasetReport:
         },
         duplicates={
             "total": _scalar(
-                session, "SELECT count(*) FROM complaints WHERE duplicate_of_id IS NOT NULL"
+                session,
+                f"SELECT count(*) FROM complaints WHERE duplicate_of_id IS NOT NULL "
+                f"AND {DATASET_SCOPE}",
             ),
             "similarity_min": _scalar(
                 session,
-                "SELECT min(duplicate_similarity) FROM complaints WHERE duplicate_of_id IS NOT NULL",
+                f"SELECT min(duplicate_similarity) FROM complaints WHERE "
+                f"duplicate_of_id IS NOT NULL AND {DATASET_SCOPE}",
             ),
             "similarity_max": _scalar(
                 session,
-                "SELECT max(duplicate_similarity) FROM complaints WHERE duplicate_of_id IS NOT NULL",
+                f"SELECT max(duplicate_similarity) FROM complaints WHERE "
+                f"duplicate_of_id IS NOT NULL AND {DATASET_SCOPE}",
             ),
             "examples": [
                 {"duplicate": dup, "original": orig, "similarity": float(sim) if sim else None}
