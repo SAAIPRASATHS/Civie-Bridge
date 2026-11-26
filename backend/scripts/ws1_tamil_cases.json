@@ -1,0 +1,282 @@
+{
+  "version": 1,
+  "description": "WS-1 Tamil correctness evaluation dataset. Covers the five required families (native Tamil, romanised Tamil, mixed Tamil-English, missing location, multiple issues) plus the three WS-1 acceptance targets: transliteration classification, location extraction (correct-or-null) and English normalisation.",
+  "acceptance_targets": {
+    "transliteration_classification": 0.8,
+    "location_extraction": 0.9,
+    "english_normalisation": 0.9
+  },
+  "cases": [
+    {
+      "id": "nat-water-01",
+      "group": "native_tamil",
+      "text": "குடிநீர் வரவில்லை",
+      "expect_language": "ta",
+      "expect_category": "water_supply",
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Bare native-Tamil water complaint; no location, no duration. Should honestly report missing detail."
+    },
+    {
+      "id": "nat-waste-01",
+      "group": "native_tamil",
+      "text": "வார்டு 10 இல் 5 நாட்கள் குப்பை அள்ளப்படவில்லை",
+      "expect_language": "ta",
+      "expect_category": "waste_management",
+      "expect_location": "Ward 10",
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Native Tamil with ward and duration; the ward must be the extracted location."
+    },
+    {
+      "id": "nat-light-01",
+      "group": "native_tamil",
+      "text": "அண்ணா நகர் தெரு விளக்கு எரியவில்லை",
+      "expect_language": "ta",
+      "expect_category": "street_lighting",
+      "expect_location": null,
+      "check_location": false,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Street lighting in Tamil script; place name without a locator hint."
+    },
+    {
+      "id": "nat-road-01",
+      "group": "native_tamil",
+      "text": "சாலையில் பெரிய பள்ளம் உள்ளது, விபத்து ஆபத்து",
+      "expect_language": "ta",
+      "expect_category": "road_maintenance",
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Road hazard with an accident/escalation term; no locator hint so location must stay null."
+    },
+    {
+      "id": "nat-loc-01",
+      "group": "native_tamil",
+      "text": "பள்ளம் உள்ளது அருகில் அண்ணா நகர் பேருந்து நிலையம்",
+      "expect_language": "ta",
+      "expect_category": "road_maintenance",
+      "expect_location": "அண்ணா நகர் பேருந்து நிலையம்",
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Native Tamil with an explicit locator hint (அருகில்) plus a landmark noun (பேருந்து)."
+    },
+
+    {
+      "id": "rom-water-01",
+      "group": "romanised_tamil",
+      "text": "Thanneer varala",
+      "expect_language": "ta-latn",
+      "expect_category": "water_supply",
+      "expect_location": null,
+      "check_location": false,
+      "check_normalisation": true,
+      "check_transliteration_classification": true,
+      "note": "Minimal romanised Tamil; must be language-tagged ta-latn and classified as water."
+    },
+    {
+      "id": "rom-waste-01",
+      "group": "romanised_tamil",
+      "text": "kuppai theru la 5 naatkal collect pannala",
+      "expect_language": "ta-latn",
+      "expect_category": "waste_management",
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": true,
+      "note": "Existing fixture text; romanised Tamil with a stated duration."
+    },
+    {
+      "id": "rom-road-01",
+      "group": "romanised_tamil",
+      "text": "Anna Nagar la road la periya pallam irukku",
+      "expect_language": "ta-latn",
+      "expect_category": "road_maintenance",
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": true,
+      "note": "Romanised Tamil containing an English loan word (road); must still be tagged Tamil-Latin."
+    },
+    {
+      "id": "rom-light-01",
+      "group": "romanised_tamil",
+      "text": "vilakku eriyala romba irul",
+      "expect_language": "ta-latn",
+      "expect_category": "street_lighting",
+      "expect_location": null,
+      "check_location": false,
+      "check_normalisation": true,
+      "check_transliteration_classification": true,
+      "note": "Romanised Tamil street-light complaint with no English words at all."
+    },
+    {
+      "id": "rom-water-02",
+      "group": "romanised_tamil",
+      "text": "Thanneer pipe leak aaguthu",
+      "expect_language": "ta-latn",
+      "expect_category": "water_supply",
+      "expect_location": null,
+      "check_location": false,
+      "check_normalisation": true,
+      "check_transliteration_classification": true,
+      "note": "Romanised Tamil with two English loan words (pipe, leak)."
+    },
+
+    {
+      "id": "mix-water-01",
+      "group": "mixed_tamil_english",
+      "text": "Road la water leakage, 3 days aachu",
+      "expect_language": "en",
+      "expect_category": "water_supply",
+      "expect_location": null,
+      "check_location": false,
+      "check_normalisation": false,
+      "check_transliteration_classification": false,
+      "note": "Mixed Tamil-English about a water leak; water keywords outnumber the road loan word."
+    },
+    {
+      "id": "mix-light-01",
+      "group": "mixed_tamil_english",
+      "text": "Street light not working near my house",
+      "expect_language": "en",
+      "expect_category": "street_lighting",
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": false,
+      "check_transliteration_classification": false,
+      "note": "Locator hint 'near' is followed by a non-place noun, so no location may be invented."
+    },
+    {
+      "id": "mix-waste-01",
+      "group": "mixed_tamil_english",
+      "text": "Kuppai bin overflow aaguthu ward 5 la",
+      "expect_language": "ta-latn",
+      "expect_category": "waste_management",
+      "expect_location": "Ward 5",
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Mixed complaint with a ward number; the ward is the addressable location."
+    },
+    {
+      "id": "mix-light-02",
+      "group": "mixed_tamil_english",
+      "text": "தண்ணீர் supply வரவில்லை 2 days",
+      "expect_language": "ta",
+      "expect_category": "water_supply",
+      "expect_location": null,
+      "check_location": false,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Tamil script interleaved with English words and a duration."
+    },
+
+    {
+      "id": "miss-waste-01",
+      "group": "missing_location",
+      "text": "Enga area la kuppai",
+      "expect_language": "ta-latn",
+      "expect_category": "waste_management",
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Vague area reference; must ask for the exact location rather than guess one."
+    },
+    {
+      "id": "miss-water-01",
+      "group": "missing_location",
+      "text": "Thanneer problem",
+      "expect_language": "ta-latn",
+      "expect_category": "water_supply",
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Two-word romanised Tamil; location and duration both absent."
+    },
+    {
+      "id": "miss-light-01",
+      "group": "missing_location",
+      "text": "விளக்கு எரியவில்லை",
+      "expect_language": "ta",
+      "expect_category": "street_lighting",
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Native Tamil street-light complaint with no addressable detail at all."
+    },
+    {
+      "id": "miss-road-01",
+      "group": "missing_location",
+      "text": "Road la pallam",
+      "expect_language": "ta-latn",
+      "expect_category": "road_maintenance",
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Romanised Tamil road complaint; 'la' is not an address, so location must be null."
+    },
+    {
+      "id": "miss-waste-02",
+      "group": "missing_location",
+      "text": "Garbage problem",
+      "expect_language": "en",
+      "expect_category": "waste_management",
+      "expect_location": null,
+      "check_location": false,
+      "check_normalisation": false,
+      "check_transliteration_classification": false,
+      "note": "English control case: thin description, nothing to extract."
+    },
+
+    {
+      "id": "multi-01",
+      "group": "multiple_issues",
+      "text": "Thanneer problem and street light problem",
+      "expect_language": "ta-latn",
+      "expect_category": null,
+      "expect_category_any": ["water_supply", "street_lighting"],
+      "expect_location": null,
+      "check_location": false,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Two categories genuinely compete; either answer is defensible, human review is not required to be automatic."
+    },
+    {
+      "id": "multi-02",
+      "group": "multiple_issues",
+      "text": "kuppai problem, road la pallam, water leak",
+      "expect_language": "ta-latn",
+      "expect_category": null,
+      "expect_category_any": ["water_supply", "waste_management", "road_maintenance"],
+      "expect_location": null,
+      "check_location": true,
+      "check_normalisation": true,
+      "check_transliteration_classification": false,
+      "note": "Three issues in one romanised Tamil complaint; water has the strongest keyword evidence."
+    },
+    {
+      "id": "multi-03",
+      "group": "multiple_issues",
+      "text": "Garbage not collected and street light not working",
+      "expect_language": "en",
+      "expect_category": null,
+      "expect_category_any": ["waste_management", "street_lighting"],
+      "expect_location": null,
+      "check_location": false,
+      "check_normalisation": false,
+      "check_transliteration_classification": false,
+      "note": "English multi-issue control case."
+    }
+  ]
+}
