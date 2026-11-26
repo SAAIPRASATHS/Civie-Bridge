@@ -40,6 +40,7 @@ from app.agents.extraction import (
     has_tamil_script,
     is_grounded,
     location_is_specific,
+    looks_like_location,
     normalise,
     question_for,
     tokens,
@@ -308,7 +309,13 @@ class IntakeAgent:
         location_text = deterministic_location or ward
         if draft and draft.location_text and draft.location_text.strip():
             candidate = draft.location_text.strip()
-            if is_grounded(candidate, cleaned):
+            # Two independent guards. ``is_grounded`` proves the words came from
+            # the citizen; ``looks_like_location`` proves they actually form an
+            # address. Grounding alone accepts phrases such as "my house" or
+            # "road la pallam", which merely echo the complaint, so a model
+            # candidate is only accepted when the deterministic locator would
+            # itself recognise it as a location.
+            if is_grounded(candidate, cleaned) and looks_like_location(candidate):
                 # Compare word counts, not characters: the model's "வார்டு 10" is
                 # longer in characters than the canonical "Ward 10" but says the
                 # same thing, so a character comparison displaces the
