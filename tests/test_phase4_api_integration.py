@@ -90,31 +90,18 @@ requires_seeded_data = pytest.mark.skipif(
 )
 
 
-def _first_user_id() -> uuid.UUID | None:
-    if not _database_status.connected:
-        return None
-    try:
-        with get_engine().connect() as connection:
-            return connection.execute(text("SELECT id FROM users LIMIT 1")).scalar_one_or_none()
-    except Exception:
-        return None
-
-
-_SEEDED_USER = _first_user_id()
-requires_user = pytest.mark.skipif(
-    _SEEDED_USER is None,
-    reason="no users stored; the officer review audit trail needs a reviewer",
-)
-
-
 # ---------------------------------------------------------------------------
 # Fixtures and helpers
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    """A client whose agent pipeline is deterministic (no model calls)."""
+def client(as_officer, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """A client whose agent pipeline is deterministic (no model calls).
+
+    Every Phase 4 endpoint requires an officer or administrator, so the client
+    is served as an officer; the role guard still runs on the server.
+    """
     pipeline = ComplaintPipeline.build(use_llm=False)
     monkeypatch.setattr(duplicates_api, "get_pipeline", lambda: pipeline)
     monkeypatch.setattr(evidence_api, "get_pipeline", lambda: pipeline)
@@ -434,8 +421,7 @@ def test_analyze_endpoint_unknown_complaint_is_404(client: TestClient) -> None:
 
 @requires_database
 @requires_seeded_data
-@requires_user
-def test_review_approve_links_and_records_audit(client: TestClient) -> None:
+def test_review_approve_links_and_records_audit(client: TestClient, officer_user) -> None:
     subject_id, _ = _persist(GARBAGE)
     candidate_id, candidate_reference = _persist(GARBAGE)
     try:
@@ -444,7 +430,7 @@ def test_review_approve_links_and_records_audit(client: TestClient) -> None:
             json={
                 "candidate_id": str(candidate_id),
                 "decision": "approve",
-                "reviewer_id": str(_SEEDED_USER),
+                "reviewer_id": str(officer_user.id),
                 "reason": "same bin, same street",
             },
         )
@@ -474,7 +460,7 @@ def test_review_approve_links_and_records_audit(client: TestClient) -> None:
             )
             assert len(history) == 1
             assert history[0].to_status is ComplaintStatus.DUPLICATE
-            assert history[0].changed_by_user_id == _SEEDED_USER
+            assert history[0].changed_by_user_id == officer_user.id
             assert history[0].reason == "same bin, same street"
         finally:
             session.close()
@@ -484,8 +470,7 @@ def test_review_approve_links_and_records_audit(client: TestClient) -> None:
 
 @requires_database
 @requires_seeded_data
-@requires_user
-def test_review_reject_leaves_the_complaints_separate(client: TestClient) -> None:
+def test_review_reject_leaves_the_complaints_separate(client: TestClient, officer_user) -> None:
     subject_id, _ = _persist(GARBAGE)
     candidate_id, _ = _persist(GARBAGE)
     try:
@@ -494,7 +479,7 @@ def test_review_reject_leaves_the_complaints_separate(client: TestClient) -> Non
             json={
                 "candidate_id": str(candidate_id),
                 "decision": "reject",
-                "reviewer_id": str(_SEEDED_USER),
+                "reviewer_id": str(officer_user.id),
             },
         )
 
@@ -584,7 +569,7 @@ def test_evidence_analyze_endpoint(client: TestClient) -> None:
     assert body["original_evidence_preserved"] is True
 
 
-def test_evidence_analyze_handles_a_non_image_without_failing(client: TestClient) -> None:
+def test_evidence_analyze_rejects_a_non_image_with_a_clean_422(client: TestClient) -> None:
     response = client.post(
         "/api/evidence/analyze",
         json={
@@ -593,14 +578,13 @@ def test_evidence_analyze_handles_a_non_image_without_failing(client: TestClient
         },
     )
 
-    assert response.status_code == 200
-    analysis = response.json()["analysis"]
-    assert analysis["image_analyzed"] is False
-    assert (
-        analysis["verification_status"] == EvidenceVerificationStatus.MANUAL_REVIEW_REQUIRED.value
-    )
-    assert analysis["requires_manual_review"] is True
-    assert analysis["is_proof_of_validity"] is False
+    # Phase 7 validates the upload at the boundary: a file that is not a
+    # recognised, decodable image is refused with a caller-safe 422 rather than
+    # being handed to the agent as a degraded analysis.
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "notes.txt" in detail
+    assert "image" in detail
 
 
 def test_evidence_analyze_rejects_invalid_base64(client: TestClient) -> None:

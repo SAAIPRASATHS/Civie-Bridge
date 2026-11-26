@@ -1,23 +1,30 @@
 # CivicBridge AI
 
-> Autonomous multi-agent system for citizen grievance resolution and public service delivery.
-> Built for the **AgentVerse Finale** — fully local LLM inference via **Ollama** + **LangGraph**.
+**Smart Governance Platform**
+
+> Intelligent Citizen Grievance Management and Governance Platform — connecting citizens,
+> government departments and public-service officers through AI-powered governance.
+
+An autonomous multi-agent system for citizen grievance resolution and public service delivery.
+Built for the **AgentVerse Finale** — fully local LLM inference via **Ollama** + **LangGraph**.
 
 CivicBridge AI ingests citizen grievances (English / Tamil, text + photo evidence),
 classifies and de-duplicates them, routes them to the responsible municipal
 department, drafts resolution recommendations, watches SLA deadlines, and keeps a
 human officer in the loop for every consequential decision.
 
-> **Status: Phase 6 complete — the six agents now run as one observable,
-> stateful LangGraph workflow** (`POST /api/v1/workflow/run`), with per-node
-> timing, bounded retries, an in-process checkpointer for human-review
-> interrupts and the guarantee that no consequential action happens
-> automatically. Phases 7–10 (auth/RBAC, the web applications, analytics and
-> evaluation) are still to come.
+> **Status: Phase 7 complete — the whole system now sits behind server-side
+> authentication and role-based authorisation, with a citizen portal
+> (`/api/citizen/*`) and a read-only officer dashboard (`/api/officer/*`) over
+> the Phase 6 LangGraph workflow.** A signed, HttpOnly session cookie replaces
+> any browser-side trust: the caller is re-resolved from the database on every
+> request, uploads are validated at the boundary, and every consequential
+> decision still requires a human officer. Phases 8–10 (the web applications,
+> analytics and evaluation) are still to come.
 
 ---
 
-## 1. Current state (Phases 1–6)
+## 1. Current state (Phases 1–7)
 
 | Phase | Delivered and verified |
 |---|---|
@@ -27,6 +34,7 @@ human officer in the loop for every consequential decision.
 | **4 — Agents + integration** | **Duplicate Detection Agent** (offline TF-IDF + Haversine; 70/30 text/geography; category guard) and **Evidence Verification Agent** (OpenCV measurements only), Pydantic schemas, an offline benchmark harness (`ml/duplicate_detection/`), **four new FastAPI endpoints**, the human-approval link-review workflow and **31 duplicate-detection tests** |
 | **5 — Routing and resolution** | **Department Routing Agent** (deterministic rule-match over the prototype directory) and **Resolution Recommendation Agent** (prototype service guidelines + unverified SLA disclosure), Pydantic schemas, **four new FastAPI endpoints**, the officer assignment-approval workflow and **47 routing/resolution tests** |
 | **6 — Orchestration** | **LangGraph workflow** wiring the six agents into one observable run (typed Pydantic state, per-node timing, bounded retries and timeouts, degraded-mode handling, a human-review checkpoint with an in-process checkpointer), a **versioned `/api/v1/workflow` endpoint pair** and **25 orchestration tests** |
+| **7 — Integration** | **Server-side session authentication** (scrypt hashes, HMAC-signed HttpOnly cookie) with typed **role guards** (`CitizenUser` / `OfficerUser` / `AdminUser`), a **citizen portal** (submit English/Tamil complaints with validated evidence uploads, track your own) and a **read-only officer dashboard** (list, review queue, department directory, detail + audit trail), plus **36 authentication/RBAC/portal/dashboard tests** |
 
 | Area | What exists now |
 |---|---|
@@ -47,10 +55,15 @@ human officer in the loop for every consequential decision.
 | Agent plumbing | Shared Ollama client with a bounded response cache, deterministic extraction, JSON repair loop, persistence (`app/agents/`) |
 | Orchestration workflow | One typed, stateful **LangGraph** run over the six agents with conditional edges, per-node timing, bounded retries/timeouts, degraded-mode handling and a human-review checkpoint (`app/agents/workflow.py`) |
 | Orchestration state | `WorkflowState` (identity, inputs, every agent result, review requirements, errors/degradation, trace + timings) and `WorkflowRunResult` for the API (`app/schemas/workflow.py`) |
-| API | `POST /api/agents/intake`, `POST /api/agents/classify`, `POST /api/agents/analyze-complaint` (`app/api/agents.py`); `POST /api/duplicates/analyze`, `GET /api/complaints/{id}/duplicates`, `POST /api/complaints/{id}/duplicates/review` (`app/api/duplicates.py`); `POST /api/evidence/analyze` (`app/api/evidence.py`); `POST /api/routing/recommend`, `GET /api/complaints/{id}/routing`, `POST /api/complaints/{id}/routing/decision`, `POST /api/resolution/recommend` (`app/api/routing.py`); `POST /api/v1/workflow/run`, `POST /api/v1/workflow/{id}/resume` (`app/api/workflow.py`) |
+| Authentication | Stateless, HMAC-SHA256-signed **HttpOnly session cookie** + `hashlib.scrypt` password hashes (`app/core/security.py`); `/api/auth/login`, `/logout`, `/me`, `/demo-accounts` (`app/api/auth.py`) |
+| Authorisation | Typed FastAPI role guards re-resolved from the database on every request — `CurrentUser`, `AuthenticatedUser`, `CitizenUser`, `OfficerUser`, `AdminUser` (`app/api/deps.py`) |
+| Upload validation | Size, declared-vs-sniffed MIME, magic-byte and OpenCV-decode checks before an image reaches the evidence agent (`app/core/uploads.py`) |
+| Citizen portal | Submit English/Tamil complaints with optional evidence, list and track **only your own** complaints (`app/api/citizens.py`) |
+| Officer dashboard | Read-only list, review queue, department directory, full complaint detail (stored agent results, duplicate matches, evidence, assignments, audit trail) and an audit endpoint (`app/api/officers.py`) |
+| API | `POST /api/agents/intake`, `POST /api/agents/classify`, `POST /api/agents/analyze-complaint` (`app/api/agents.py`); `POST /api/duplicates/analyze`, `GET /api/complaints/{id}/duplicates`, `POST /api/complaints/{id}/duplicates/review` (`app/api/duplicates.py`); `POST /api/evidence/analyze` (`app/api/evidence.py`); `POST /api/routing/recommend`, `GET /api/complaints/{id}/routing`, `POST /api/complaints/{id}/routing/decision`, `POST /api/resolution/recommend` (`app/api/routing.py`); `POST /api/v1/workflow/run`, `POST /api/v1/workflow/{id}/resume` (`app/api/workflow.py`); `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/demo-accounts` (`app/api/auth.py`); `POST\|GET /api/citizen/complaints`, `GET /api/citizen/complaints/{ref}` (`app/api/citizens.py`); `GET /api/officer/complaints`, `/review-queue`, `/departments`, `/{id}`, `/{id}/audit` (`app/api/officers.py`) |
 | Agent CLI | `python agents/intake_agent.py`, `python agents/classification_agent.py` |
 | Ollama integration | Health probe, model discovery, model verification, LangChain chat-model factory, live smoke test (`app/services/ollama_service.py`) |
-| Tests | **226 tests** across 11 files (`tests/`), service-gated so they skip cleanly when PostgreSQL or Ollama is absent |
+| Tests | **262 tests** across 12 files (`tests/`) with a shared `conftest.py`, service-gated so they skip cleanly when PostgreSQL or Ollama is absent |
 
 Nothing in the project fabricates model output. If Ollama or the model is
 missing, the agents degrade to deterministic extraction (`degraded=True`)
@@ -152,7 +165,7 @@ deterministic — no embeddings download, no per-pair LLM call:
   cross-category pair has its score multiplied by `CATEGORY_MISMATCH_PENALTY`
   (0.85) — an initial configurable safeguard to keep unrelated categories from
   matching on wording alone.
-* **Borderline cases only** may consult `llama3.1:latest` for a second opinion;
+* **Borderline cases only** may consult `civicbridge-ai:latest` for a second opinion;
   everything else is decided by the arithmetic above.
 * **Human approval is mandatory and structurally enforced.**
   `linking_requires_human_approval` is always `true` on the result, and the
@@ -446,11 +459,12 @@ endpoints remain the only paths that act on a complaint. A human-review
 interrupt is an **acknowledgement request, not an authorisation** — resuming
 validates the reviewer and records only that.
 
-**Latency (CPU-only, `llama3.1:latest`).** Deterministic path (`AGENT_USE_LLM=false`):
-whole workflow **~6 ms**. Live path: the LLM nodes dominate — e.g. one live run
-`intake` ≈ 54 s, `classification` ≈ 34 s, end-to-end **≈ 89 s**; per-node and
-total latencies are returned in every result. Expensive LLM nodes are **not**
-parallelised (they share one local model).
+**Latency (`civicbridge-ai:latest`).** Deterministic path (`AGENT_USE_LLM=false`):
+whole workflow **~6 ms**. Live path: the LLM nodes dominate — a CPU-only run
+measured `intake` ≈ 54 s, `classification` ≈ 34 s, end-to-end **≈ 89 s**; with
+GPU offload enabled (this host: ~25% CPU / 75% GPU) the per-call cost is lower.
+Per-node and total latencies are returned in every result. Expensive LLM nodes
+are **not** parallelised (they share one local model).
 
 #### Phase 6 endpoints
 
@@ -478,6 +492,125 @@ run with the same `request_id` is idempotent: the existing complaint is reused,
 so a retry cannot create a second complaint or a second set of log rows. No new
 migration was needed — every column already existed.
 
+### 2.9 Authentication, RBAC and the portals (Phase 7)
+
+Phase 7 puts the whole system behind a **server-side** identity boundary and adds
+the two human-facing surfaces the earlier phases were building toward. It is
+implemented with the standard library only — no new runtime dependency.
+
+**Authentication is a signed, HttpOnly cookie, not a browser-side flag.**
+`app/core/security.py` provides two small primitives:
+
+* **Password hashing** — `hashlib.scrypt` (`n=2¹⁴, r=8, p=1`) with a per-account
+  random salt. A stored hash is **self-describing** (`scrypt$n$r$p$salt$hash`),
+  so the cost parameters can be raised later without invalidating existing rows.
+  Verification is constant-time (`hmac.compare_digest`) and returns `False` —
+  never raises — for a missing, malformed or pre-authentication placeholder hash.
+* **Session tokens** — an HMAC-SHA256-signed `user_id.expiry.signature` string
+  carried in an HttpOnly cookie. The token is **stateless** on purpose: no
+  session table is required, and signing out is a matter of clearing the cookie.
+  The signature is checked *before* the expiry is read, so a forged token cannot
+  influence any control flow.
+
+**The browser is never trusted to say who it is.** `app/api/deps.py` resolves the
+caller from the cookie and **re-reads the account from the database on every
+request**. The role check happens there, on the server, before any handler body
+runs. A frontend that hides a button is a convenience, not a control. Five typed
+`Annotated` guards are exported:
+
+| Guard | Resolves | Refuses with |
+|---|---|---|
+| `CurrentUser` | the caller, or `None` | — (never raises) |
+| `AuthenticatedUser` | any signed-in, active account | `401` when anonymous |
+| `CitizenUser` | a citizen portal account | `403` for an officer/admin |
+| `OfficerUser` | an officer **or** administrator | `403` for a citizen |
+| `AdminUser` | an administrator only | `403` otherwise |
+
+A cookie that is absent, malformed, expired or signed with the wrong key simply
+resolves to *no identity*; a database failure during the lookup is reported as
+`503` rather than being mistaken for "not signed in". Every failure returns a
+bare status code with a short, non-leaking detail — no stack trace, internal
+identifier or database message.
+
+**The citizen portal** (`app/api/citizens.py`) lets a signed-in citizen submit a
+complaint in English or Tamil (optionally with evidence images), then list and
+track **only their own** complaints:
+
+* The citizen's text is stored **verbatim** in `complaints.description`; a
+  citizen-supplied category, location or language is stored as a *citizen fact*
+  and used only where the agent could not determine a value.
+* The submission is handed to the **Phase 6 workflow**, and every AI result
+  (classification, priority, suggested department, duplicate matches, resolution
+  steps) is returned under a clearly labelled `analysis` block with an explicit
+  notice: nothing has been approved, assigned, merged, resolved or closed.
+* Repeating the same `request_id` is **idempotent** — the existing complaint is
+  returned with `replayed=true`; a second row is never written.
+* `GET /complaints/{reference_id}` answers **`404`** for a reference that belongs
+  to somebody else, so the endpoint cannot be used to confirm that another
+  citizen's complaint exists.
+
+**The officer dashboard** (`app/api/officers.py`) is **read-only**. Every route is
+guarded by `OfficerUser`, and it surfaces exactly what the pipeline recorded: the
+paginated/filterable complaint list, the pending **review queue**, the prototype
+**department directory**, and a full complaint **detail** view (verbatim text,
+stored intake/classification results, a fresh routing + resolution recommendation,
+ranked duplicate matches with their reasons, evidence analysis, assignment history
+and the append-only audit trail) plus an `/{id}/audit` endpoint. It **never**
+approves, rejects, assigns, merges, resolves or closes anything — those remain the
+exclusive job of the explicit Phase 4/5 officer action endpoints, whose paths the
+detail view names in `decision_endpoints` but never calls.
+
+**Uploads are validated at the boundary** (`app/core/uploads.py`) before any
+bytes reach the evidence agent, because the file name and the browser-supplied
+`Content-Type` are untrusted hints only:
+
+1. **Size** — the decoded byte length is checked against `MAX_UPLOAD_BYTES`.
+2. **Declared type** — when stated, the MIME type must be accepted *and* agree
+   with what the bytes actually are (a `.png` holding a PDF is refused).
+3. **Actual content** — the leading bytes are matched against JPEG/PNG/WebP magic
+   numbers, and OpenCV must decode the image; a truncated or corrupt file is
+   refused rather than silently analysed.
+
+A rejected upload returns a caller-safe `422` that names the rule broken — never a
+path or a stack trace.
+
+#### Phase 7 endpoints
+
+| Method | Path | Guard | Returns |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | — | `LoginResponse` and sets the HttpOnly session cookie |
+| `POST` | `/api/auth/logout` | — | clears the session cookie (always succeeds) |
+| `GET` | `/api/auth/me` | `CurrentUser` | the caller's own `UserProfile`, or `401` |
+| `GET` | `/api/auth/demo-accounts` | — | the synthetic demo accounts (development/test only) |
+| `POST` | `/api/citizen/complaints` | `CitizenUser` | `ComplaintSubmissionResponse` — the verbatim complaint + labelled AI suggestions |
+| `GET` | `/api/citizen/complaints` | `CitizenUser` | `CitizenComplaintPage` — the caller's own complaints |
+| `GET` | `/api/citizen/complaints/{reference_id}` | `CitizenUser` | `CitizenComplaintDetail` — own complaint + visible audit, or `404` |
+| `GET` | `/api/officer/complaints` | `OfficerUser` | `OfficerComplaintPage` — paginated, filterable list |
+| `GET` | `/api/officer/review-queue` | `OfficerUser` | `OfficerComplaintPage` — complaints awaiting a human |
+| `GET` | `/api/officer/departments` | `OfficerUser` | `DepartmentDirectoryPage` — the prototype directory |
+| `GET` | `/api/officer/complaints/{id}` | `OfficerUser` | `OfficerComplaintDetail` — full read-only detail |
+| `GET` | `/api/officer/complaints/{id}/audit` | `OfficerUser` | `OfficerAuditTrail` — status history, assignments, agent steps |
+
+```powershell
+# Sign in as the synthetic citizen (sets an HttpOnly cookie the browser cannot read)
+curl -c cookies.txt -X POST http://127.0.0.1:8000/api/auth/login `
+  -H "Content-Type: application/json" `
+  -d '{"email":"citizen001@civicbridge.prototype","password":"citizen-demo-password"}'
+
+# Submit a complaint as that citizen (the text is kept verbatim)
+curl -b cookies.txt -X POST http://127.0.0.1:8000/api/citizen/complaints `
+  -H "Content-Type: application/json" `
+  -d '{"text":"Garbage has not been collected on our street for five days."}'
+
+# The officer dashboard reads the queue (a citizen cookie would get a 403)
+curl -b officer_cookies.txt "http://127.0.0.1:8000/api/officer/review-queue?limit=10"
+```
+
+> **Prototype credentials.** The demo accounts and their documented passwords are
+> listed by `/api/auth/demo-accounts` (in `development`/`test` only) and come from
+> `AUTH_*_PASSWORD`. They are synthetic and **must be changed** before any
+> non-prototype use, together with `SESSION_SECRET_KEY`.
+
 ---
 
 ## 3. Verified environment
@@ -488,17 +621,22 @@ migration was needed — every column already existed.
 | Python | 3.11.9 |
 | PostgreSQL | 17.6 @ `localhost:5432` |
 | Ollama | 0.40.17 @ `http://localhost:11434` |
-| LLM | `llama3.1:latest` (8B, Q4_K_M, tool-calling capable) |
+| LLM | `civicbridge-ai:latest` (8B, Q4_K_M, tool-calling capable) |
 | Database extensions | `pg_trgm`, `uuid-ossp` |
 
 ### Decision: LLM choice
 
-The original plan targeted `qwen2.5:3b`. The local machine already has
-`llama3.1:latest` pulled, so CivicBridge AI uses **`llama3.1:latest`** and no
-extra download is needed. Qwen can be benchmarked later by changing one line:
+CivicBridge AI runs the locally available 8B model under a project-aligned
+Ollama alias, **`civicbridge-ai:latest`** (created with
+`ollama cp <source> civicbridge-ai:latest`). An alias does **not** retrain the
+model or change its capabilities - it only gives the local artifact a
+CivicBridge AI identity. The model is chosen entirely through `OLLAMA_MODEL`,
+so it can be swapped without a code change:
 
 ```dotenv
-OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_MODEL=civicbridge-ai:latest   # active
+OLLAMA_MODEL=qwen2.5:3b              # smaller/faster alternative, if pulled
+OLLAMA_MODEL=llama3.1:latest         # original fallback
 ```
 
 ### Decision: PostgreSQL extensions
@@ -521,19 +659,24 @@ Consequences, applied from Phase 4 onward:
 `docker-compose.yml` documents the intended production topology
 (PostgreSQL + pgvector + PostGIS) behind an opt-in compose profile.
 
-### Decision: CPU-only inference
+### Decision: GPU offload, managed by Ollama
 
-This host's CUDA runtime cannot initialize the Ollama `llama-server` backend:
+Ollama decides how many layers to place on the GPU: `OLLAMA_NUM_GPU` is left
+**unset** (the code default is `None`, so no `num_gpu` option is sent). On this
+host (RTX 3050 6 GB) that offloads the bulk of the model — verified through the
+application path with `ollama ps` at **25% CPU / 75% GPU** — shortening inference
+with no code change.
+
+An earlier CUDA initialisation failure made CPU-only inference the safe default:
 
 ```
 llama-server process no longer running: exit status 0xc0000409
 CUDA error: shared object initialization failed
 ```
 
-GPU-backed requests therefore return HTTP 500. CivicBridge AI sets
-`OLLAMA_NUM_GPU=0` so inference runs on CPU and works reliably (verified).
-Once the GPU driver/runtime is repaired, set `OLLAMA_NUM_GPU` to a layer count
-(or remove it) to re-enable acceleration — no code change required.
+That failure no longer reproduces and GPU offload was verified working. If it
+recurs, set `OLLAMA_NUM_GPU=0` to fall back to CPU-only — no code change
+required.
 
 ### Decision: LangChain integration version
 
@@ -554,9 +697,11 @@ CivicBridge-AI/
 ├── backend/
 │   ├── app/
 │   │   ├── agents/               # Phases 3-6 - intake, classification, duplicate, evidence, routing, resolution, pipeline, persistence + workflow (LangGraph)
-│   │   ├── api/                  # FastAPI routers (agents.py, duplicates.py, evidence.py, routing.py, workflow.py)
+│   │   ├── api/                  # FastAPI routers (agents.py, duplicates.py, evidence.py, routing.py, workflow.py, auth.py, citizens.py, officers.py, deps.py)
 │   │   ├── core/
 │   │   │   ├── config.py         # Pydantic Settings from environment
+│   │   │   ├── security.py       # Phase 7 - scrypt hashing + signed session tokens
+│   │   │   ├── uploads.py        # Phase 7 - evidence upload validation
 │   │   │   └── logging.py        # Central logging setup
 │   │   ├── database/
 │   │   │   └── session.py        # Engine, session factory, connectivity probe
@@ -581,6 +726,7 @@ CivicBridge-AI/
 │   └── priority_prediction/      # Reserved
 ├── datasets/                     # Phase 2 - synthetic complaints + dataset report
 ├── tests/
+│   ├── conftest.py
 │   ├── test_phase1_health.py
 │   ├── test_phase2_database.py
 │   ├── test_phase2_dataset.py
@@ -591,7 +737,8 @@ CivicBridge-AI/
 │   ├── test_phase4_api_integration.py
 │   ├── test_phase5_routing_agent.py
 │   ├── test_phase5_api_integration.py
-│   └── test_phase6_workflow.py
+│   ├── test_phase6_workflow.py
+│   └── test_phase7_auth.py
 ├── docs/
 ├── docker-compose.yml
 ├── .env.example
@@ -649,17 +796,18 @@ Edit `.env` — importantly:
 
 ```dotenv
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1:latest
+OLLAMA_MODEL=civicbridge-ai:latest
 ```
 
 `.env` is git-ignored. The default development password is a throwaway local
 credential; replace it before any shared or deployed environment.
 
-### 5.5 Pull the model (only if missing)
+### 5.5 Provide the model
 
 ```powershell
-ollama list                        # check what is already available
-ollama pull llama3.1:latest
+ollama list                                        # check what is already available
+ollama cp llama3.1:latest civicbridge-ai:latest    # create the CivicBridge AI alias
+ollama pull llama3.1:latest                        # or pull a model directly
 ```
 
 ---
@@ -681,16 +829,16 @@ Expected shape of the output:
  environment=development  version=0.1.0
 ==============================================================================
 
-  config: model=llama3.1:latest  base_url=http://localhost:11434
+  config: model=civicbridge-ai:latest  base_url=http://localhost:11434
   config: database=postgresql+psycopg2://civicbridge_app:***@localhost:5432/civicbridge
 
   [PASS] PostgreSQL connection     server 17.6 @ localhost:5432
   [PASS] CivicBridge database      civicbridge (owner civicbridge_app, user civicbridge_app)
   [PASS] Database extensions       extensions: pg_trgm, plpgsql, uuid-ossp
   [PASS] Ollama service            v0.40.17 @ http://localhost:11434 (2 model(s) pulled)
-  [PASS] Model llama3.1:latest     8.0B Q4_K_M 4.9 GB | capabilities: completion, tools
+  [PASS] Model civicbridge-ai:latest  8.0B Q4_K_M 4.9 GB | capabilities: completion, tools
   [PASS] LangChain Ollama          provider: langchain-ollama
-  [PASS] LLM response test         <latency> ms via langchain-ollama (llama3.1:latest)
+  [PASS] LLM response test         <latency> ms via langchain-ollama (civicbridge-ai:latest)
 
 -----------------------------------------------------------------------------
   7 passed | 0 failed | 0 skipped
@@ -722,7 +870,7 @@ python -m app.cli dataset-report                  # validates the generated data
 python agents/ollama_test.py
 ```
 
-Sends one real grievance-classification prompt to `llama3.1:latest` and prints
+Sends one real grievance-classification prompt to `civicbridge-ai:latest` and prints
 the model's live response.
 
 ### 6.4 Running the agents (Phase 3)
@@ -752,16 +900,26 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 * `GET /` → application metadata
 * `GET /health` → PostgreSQL + Ollama + model availability
-* `POST /api/agents/intake` · `/classify` · `/analyze-complaint` → the intake + classification agents
+* `POST /api/auth/login` · `/logout` · `GET /api/auth/me` · `GET /api/auth/demo-accounts` → session sign-in and the caller's profile
+* `POST /api/citizen/complaints` · `GET /api/citizen/complaints` · `GET /api/citizen/complaints/{ref}` → the citizen portal (CitizenUser)
+* `GET /api/officer/complaints` · `/review-queue` · `/departments` · `/{id}` · `/{id}/audit` → the read-only officer dashboard (OfficerUser)
+* `POST /api/agents/intake` · `/classify` · `/analyze-complaint` → the intake + classification agents (AuthenticatedUser)
 * `POST /api/duplicates/analyze` → potential duplicate matches for an inline or stored complaint
 * `GET /api/complaints/{complaint_id}/duplicates` → paginated potential matches for a stored complaint
 * `POST /api/complaints/{complaint_id}/duplicates/review` → record an officer's approve/reject decision
-* `POST /api/evidence/analyze` → OpenCV evidence measurement
+* `POST /api/evidence/analyze` → OpenCV evidence measurement and upload validation
 * `POST /api/routing/recommend` → department recommendation for an inline complaint
 * `GET /api/complaints/{complaint_id}/routing` → department recommendation for a stored complaint
 * `POST /api/complaints/{complaint_id}/routing/decision` → record an officer's approve/reject routing decision
 * `POST /api/resolution/recommend` → guideline-backed next steps with the unverified SLA disclosure
 * `GET /docs` → interactive OpenAPI UI
+
+> **Authentication is enforced server-side (Phase 7).** Sign in first and send the
+> session cookie with every request. The agent, duplicate, evidence, routing,
+> resolution and workflow endpoints require an authenticated account (a citizen
+> is refused on the officer-only decision endpoints); the officer dashboard
+> requires an officer or administrator. An anonymous request gets `401`, a
+> signed-in account without the right role gets `403`.
 
 Example:
 
@@ -784,11 +942,12 @@ python -m pytest ../tests/test_intake_agent.py -v   # one file
 python -m pytest ../tests/test_phase4_api_integration.py -v   # Phase 4 API + review workflow
 python -m pytest ../tests/test_phase5_api_integration.py -v   # Phase 5 API + routing-decision workflow
 python -m pytest ../tests/test_phase6_workflow.py -v          # Phase 6 orchestration workflow
+python -m pytest ../tests/test_phase7_auth.py -v              # Phase 7 auth, RBAC + the portals
 ```
 
 Integration tests skip automatically (`SKIP`) when PostgreSQL or Ollama is
 unavailable, so the suite is safe to run anywhere. The live tests make real
-`llama3.1:latest` calls and re-use the response cache, so the whole run costs
+`civicbridge-ai:latest` calls and re-use the response cache, so the whole run costs
 only a couple of inferences. The Phase 4 API tests cover the duplicate
 endpoints, the no-match and multiple-match responses, invalid complaint ids,
 missing coordinates, the evidence endpoint (including invalid evidence), the
@@ -804,7 +963,19 @@ and too-thin / empty complaints, the critical-priority safeguard, potential
 duplicates, optional evidence, an unavailable model, malformed output, a failed
 node, bounded-retry idempotency, interrupt/resume, the `/api/v1/workflow`
 endpoints, persistence + audit integrity and unauthorized resume), plus a small
-number of live runs against the real local model.
+number of live runs against the real local model. The Phase 7 tests cover the
+security primitives (scrypt hashing and salt uniqueness, signed-token round trip,
+tamper/expiry/wrong-key rejection), upload validation (size, declared-vs-sniffed
+type, non-image, empty), the auth endpoints (login/logout/me, generic failure
+messages, demo accounts gated to development), role-based authorisation
+(anonymous `401`, citizen refused on officer routes `403`, officer refused on the
+citizen portal), the citizen portal (verbatim text, idempotent `request_id`,
+own-only visibility with a `404` for another citizen's reference) and the
+read-only officer dashboard (list, review queue, prototype directory, detail with
+`decision_endpoints`, audit trail). The shared `tests/conftest.py` provides
+`as_citizen` / `as_officer` / `as_admin` / `anonymous_client` fixtures. The Phase
+4/5/6 integration suites were updated to authenticate: the role guards still run
+and are still asserted.
 
 ### 6.7 Duplicate-detection benchmark
 
@@ -845,10 +1016,10 @@ python -m ruff format --check app ../tests ../agents
 | `POSTGRES_DB` | `civicbridge` | Database name |
 | `DATABASE_URL` | _(unset)_ | Full SQLAlchemy URL override |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
-| `OLLAMA_MODEL` | `llama3.1:latest` | **Active LLM — swap freely, no code change** |
+| `OLLAMA_MODEL` | `civicbridge-ai:latest` | **Active LLM — swap freely, no code change** |
 | `OLLAMA_HEALTH_TIMEOUT` | `5` | Seconds for health probes |
 | `OLLAMA_LLM_TIMEOUT` | `600` | Seconds for generation |
-| `OLLAMA_NUM_GPU` | `0` | GPU layers to offload; `0` = CPU only, unset = Ollama decides |
+| `OLLAMA_NUM_GPU` | _(unset)_ | GPU layers to offload; unset = Ollama decides (GPU when available), `0` = CPU only |
 | `OLLAMA_TEMPERATURE` | `0` | Sampling temperature |
 | `OLLAMA_NUM_PREDICT` | `256` | Max generated tokens |
 | `OLLAMA_KEEP_ALIVE` | `5m` | Model residency in memory |
@@ -863,6 +1034,18 @@ python -m ruff format --check app ../tests ../agents
 | `ORCHESTRATION_TOTAL_TIMEOUT_SECONDS` | `900` | Upper bound on the whole run, checked between nodes |
 | `ORCHESTRATION_CHECKPOINTING_ENABLED` | `true` | Compile the graph with the in-process checkpointer (enables resume) |
 | `ORCHESTRATION_INTERRUPT_FOR_REVIEW` | `false` | Default for whether the human-review checkpoint pauses (opt in per request) |
+| `AUTH_ENABLED` | `true` | Enforce server-side session authentication and role guards |
+| `SESSION_SECRET_KEY` | `civicbridge-prototype-session-key-change-me` | HMAC key for the signed session cookie — **set a long random value in any real deployment** |
+| `SESSION_COOKIE_NAME` | `civicbridge_session` | Name of the HttpOnly session cookie |
+| `SESSION_TTL_SECONDS` | `28800` | Session lifetime (8 hours) |
+| `SESSION_COOKIE_SECURE` | `false` | Send the cookie only over HTTPS (off for local http development) |
+| `SESSION_COOKIE_SAMESITE` | `lax` | `SameSite` policy on the session cookie |
+| `AUTH_CITIZEN_PASSWORD` | `citizen-demo-password` | Known demo password for the synthetic citizen accounts — **change before any real use** |
+| `AUTH_OFFICER_PASSWORD` | `officer-demo-password` | Known demo password for the synthetic officer accounts |
+| `AUTH_ADMIN_PASSWORD` | `admin-demo-password` | Known demo password for the synthetic administrator account |
+| `MAX_UPLOAD_BYTES` | `8388608` | Hard ceiling on one uploaded evidence image (8 MiB) |
+| `ALLOWED_UPLOAD_TYPES` | `image/jpeg,image/png,image/webp` | Image types accepted; the declared type must also match the bytes |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Explicit browser origins allowed to send credentialed requests — never `*` |
 
 ---
 
@@ -882,6 +1065,10 @@ python -m ruff format --check app ../tests ../agents
    above the evidence, a critical classification, an invented department - each is
    capped, corroborated or routed to a human, and the decision trail is recorded.
 7. **Synthetic data only.** No claim of integration with real government systems.
+8. **The server decides who you are.** Identity and role are resolved from a signed
+   session cookie and re-read from the database on every request — the browser is
+   never trusted to declare an identity, and an upload is judged by its bytes, not
+   by its file name.
 
 ---
 
@@ -895,7 +1082,7 @@ python -m ruff format --check app ../tests ../agents
 | 4 | ✅ Duplicate Detection + Evidence Verification agents, their FastAPI endpoints and the officer link-review workflow |
 | 5 | ✅ Department Routing + Resolution Recommendation agents, their FastAPI endpoints and the officer assignment-approval workflow |
 | 6 | ✅ LangGraph orchestration, checkpointing, human-in-the-loop approval |
-| 7 | FastAPI integration (auth, RBAC, complaint + agent endpoints) |
+| 7 | ✅ FastAPI integration — server-side session auth, role-based authorisation, the citizen portal and the read-only officer dashboard |
 | 8 | React citizen portal |
 | 9 | Government officer dashboard |
 | 10 | Analytics, GIS, evaluation metrics, Docker deployment |
@@ -916,7 +1103,9 @@ None of them blocks the current phase; they are recorded so they are not lost.
 | R-05 | Two FastAPI `on_event` **deprecation warnings** (`app/main.py`). | Tech debt | Non-blocking; migrate to lifespan event handlers. |
 | R-06 | All departments, service guidelines and SLA values are **synthetic prototype data** (`is_verified=False`). | Accepted (by design) | Labelled prototype everywhere; never presented as an official municipal assignment or government commitment. |
 | R-07 | The Phase 6 checkpointer is **in-process and not durable across restarts** (`langgraph-checkpoint` ships no SQLite saver here). | Known limitation | Fine for the synchronous `/run` call and for resume within one process; a paused run is lost if the server restarts. A persistent checkpointer (e.g. Postgres) is required before interruptions are used in production. |
-| R-08 | Live LLM latency is high on CPU-only inference (one workflow run measured ≈ 89 s end to end). | Known limitation | Acceptable for a prototype; per-node timings are recorded so a bottleneck is visible. LLM nodes are deliberately **not** parallelised against the single local model. |
+| R-08 | Live LLM latency is materially higher than the deterministic path (a CPU-only workflow run measured ≈ 89 s end to end). | Known limitation | Acceptable for a prototype; per-node timings are recorded so a bottleneck is visible. LLM nodes are deliberately **not** parallelised against the single local model. |
+| R-09 | Sessions are **stateless** (no server-side session table), so a token cannot be revoked before it expires; signing out only clears the cookie. | Design trade-off | Acceptable for a prototype with an 8-hour TTL. A durable revocation list or a shorter TTL is required before sessions are used in production. |
+| R-10 | The session secret and the demo account passwords ship as **development defaults** in configuration. | Security debt | Documented and surfaced by `/api/auth/demo-accounts` (development/test only). `SESSION_SECRET_KEY` and the `AUTH_*_PASSWORD` values must be replaced before any non-prototype deployment. |
 
 **Phase 3 safeguard — confirmed implemented.** The classification agent caps a
 model-driven escalation at `HIGH` (`MODEL_ESCALATION_CEILING`); a `CRITICAL`
@@ -930,6 +1119,13 @@ the classification agent runs inside the LangGraph workflow: a model-only
 `CRITICAL` claim is applied at most as `HIGH`, flagged for human review, and the
 workflow never assigns, merges, resolves, rejects or closes anything on its own
 (`tests/test_phase6_workflow.py`).
+
+**Phase 7 safeguard — verified at the boundary.** Authorisation is enforced on the
+server, not in the client: an anonymous request to a protected route gets `401`,
+a citizen is refused on the officer decision routes with `403`, a citizen can only
+ever read back their **own** complaint (`404` otherwise), and an upload that is
+oversized, mislabelled or not a decodable image is rejected with a caller-safe
+`422` before it reaches an agent (`tests/test_phase7_auth.py`).
 
 ---
 
@@ -947,3 +1143,7 @@ workflow never assigns, merges, resolves, rejects or closes anything on its own
 | `AttributeError: 'ChatOllama' object has no attribute '_add_version'` | `python -m pip install langchain-ollama==1.0.0` (see the version note above) |
 | First inference is slow | One-time model load into RAM; later calls reuse it (`OLLAMA_KEEP_ALIVE`) |
 | CPU inference feels slow for long answers | Lower `OLLAMA_NUM_PREDICT`, or switch `OLLAMA_MODEL` to a smaller model |
+| `401` on a protected endpoint | Sign in with `POST /api/auth/login` and send the session cookie on every request |
+| `403` on an officer endpoint | The account's role is `citizen`; sign in as an officer or administrator |
+| `the uploaded file ... was rejected` (`422`) | The image is an unsupported type, mislabelled, corrupt or over `MAX_UPLOAD_BYTES` |
+| Signed in but every request is anonymous | The cookie is not being sent — enable credentialed CORS (a listed `CORS_ORIGINS` value) on the browser side |

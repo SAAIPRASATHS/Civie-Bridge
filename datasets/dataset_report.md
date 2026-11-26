@@ -1,6 +1,6 @@
 # CivicBridge AI - Phase 2 Dataset Report
 
-Generated: `2026-11-25T06:51:17.609293+00:00`
+Generated: `2026-11-25T14:08:49.074009+00:00`
 
 > Every number below was measured against the live PostgreSQL database.
 > The dataset is entirely synthetic; nothing here is real citizen data.

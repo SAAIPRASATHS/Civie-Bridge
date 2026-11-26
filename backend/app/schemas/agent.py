@@ -15,6 +15,7 @@ Two properties are worth calling out:
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -157,6 +158,13 @@ class DuplicateCandidate(BaseModel):
     ward: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+
+    #: The stored complaint this candidate *is*, when the candidate came from the
+    #: database. The detection agent never sets it - the officer-facing duplicate
+    #: lookup fills it in so an officer's approve/reject decision can name the
+    #: row. It stays ``None`` everywhere else, including the citizen submission
+    #: response, which must not disclose another citizen's internal identifier.
+    complaint_id: uuid.UUID | None = None
 
     # -- comparison results -------------------------------------------------
     text_similarity: float = Field(ge=0.0, le=1.0)

@@ -1,0 +1,124 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * CivicBridge AI design tokens.
+ *
+ * A calm, institutional palette: a deep civic blue for primary actions, white
+ * surfaces on a faint slate canvas, and a deliberately restrained accent set.
+ * Status colours are defined once here and reused by the badge components so a
+ * complaint's state reads the same everywhere in the product.
+ */
+:root {
+  --background: #f6f8fb;
+  --foreground: #0f172a;
+
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --primary-subtle: #e8effd;
+
+  --secondary: #eef2f7;
+  --secondary-foreground: #1e293b;
+
+  --muted: #eef2f7;
+  --muted-foreground: #5b6a83;
+
+  --accent: #e8effd;
+  --accent-foreground: #17357f;
+
+  --destructive: #c62828;
+  --destructive-foreground: #ffffff;
+  --destructive-subtle: #fdecec;
+
+  --success: #15803d;
+  --success-subtle: #e7f6ec;
+  --warning: #b45309;
+  --warning-subtle: #fdf3e3;
+  --info: #0369a1;
+  --info-subtle: #e6f3fb;
+
+  --border: #dde4ee;
+  --input: #d3dcea;
+  --ring: #1d4ed8;
+
+  --radius: 0.625rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-subtle: var(--primary-subtle);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans:
+    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* A slim, unobtrusive scrollbar for the long officer tables. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #c3cddd;
+    border-radius: 999px;
+    border: 2px solid var(--background);
+  }
+}

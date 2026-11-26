@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.security import hash_password
 from app.datasets import generator
 from app.datasets.generator import SyntheticComplaint, summarise
 from app.datasets.reference_data import (
@@ -39,9 +41,20 @@ from app.models import (
 )
 from app.models.enums import ComplaintCategory, ComplaintLanguage
 
-#: Placeholder password hash. Phase 2 has no authentication; this value exists
-#: only to satisfy the NOT NULL column and is deliberately not a valid hash.
-PLACEHOLDER_PASSWORD_HASH = "prototype:no-auth-configured"
+#: Phase 2 shipped a deliberately invalid placeholder hash. Phase 7 replaces it
+#: with a real scrypt hash so the synthetic accounts can actually sign in. The
+#: value is kept as a named constant only so the old marker is easy to grep for;
+#: no row is seeded with it any more.
+LEGACY_PLACEHOLDER_PASSWORD_HASH = "prototype:no-auth-configured"
+
+#: Known demo passwords for the synthetic accounts, taken from configuration so
+#: a reviewer can sign in without a real account. They are not secrets and the
+#: README states plainly that they must change before any real use.
+DEMO_PASSWORDS: dict[UserRole, str] = {
+    UserRole.CITIZEN: settings.auth_citizen_password,
+    UserRole.OFFICER: settings.auth_officer_password,
+    UserRole.ADMIN: settings.auth_admin_password,
+}
 
 #: Number of synthetic citizen accounts created and linked to complaints.
 CITIZEN_COUNT = 25
@@ -139,10 +152,19 @@ def seed_reference_data(session: Session) -> tuple[int, int]:
 
 
 def seed_users(session: Session) -> tuple[list[User], list[Officer]]:
-    """Create synthetic citizens, officers (per department) and one admin."""
+    """Create synthetic citizens, officers (per department) and one admin.
+
+    Every account is given a real scrypt hash of its role's documented demo
+    password, so the prototype can be signed into. No hash is ever returned or
+    logged, and the passwords are synthetic - not a real person's credentials.
+    """
     departments = session.scalars(select(Department).order_by(Department.code)).all()
     if not departments:
         raise RuntimeError("seed_reference_data must run before seed_users")
+
+    citizen_password = DEMO_PASSWORDS[UserRole.CITIZEN]
+    admin_password = DEMO_PASSWORDS[UserRole.ADMIN]
+    officer_password = DEMO_PASSWORDS[UserRole.OFFICER]
 
     citizens: list[User] = []
     for index in range(1, CITIZEN_COUNT + 1):
@@ -151,7 +173,7 @@ def seed_users(session: Session) -> tuple[list[User], list[Officer]]:
                 email=f"citizen{index:03d}@civicbridge.prototype",
                 phone=f"+91-90000-{index:05d}",
                 full_name=f"Synthetic Citizen {index:03d}",
-                password_hash=PLACEHOLDER_PASSWORD_HASH,
+                password_hash=hash_password(citizen_password),
                 role=UserRole.CITIZEN,
                 preferred_language=(ComplaintLanguage.EN if index % 3 else ComplaintLanguage.TA),
                 is_active=True,
@@ -163,7 +185,7 @@ def seed_users(session: Session) -> tuple[list[User], list[Officer]]:
         email="admin@civicbridge.prototype",
         phone="+91-90000-00000",
         full_name="Synthetic Administrator",
-        password_hash=PLACEHOLDER_PASSWORD_HASH,
+        password_hash=hash_password(admin_password),
         role=UserRole.ADMIN,
         preferred_language=ComplaintLanguage.EN,
         is_active=True,
@@ -179,7 +201,7 @@ def seed_users(session: Session) -> tuple[list[User], list[Officer]]:
                 email=f"officer.{code}{slot}@civicbridge.prototype",
                 phone=f"+91-90001-{len(officer_users) + 1:05d}",
                 full_name=f"Synthetic {department.code} Officer {slot}",
-                password_hash=PLACEHOLDER_PASSWORD_HASH,
+                password_hash=hash_password(officer_password),
                 role=UserRole.OFFICER,
                 preferred_language=ComplaintLanguage.EN,
                 is_active=True,

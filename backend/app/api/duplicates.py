@@ -15,9 +15,9 @@ row. Nothing here merges, links or rejects a complaint on its own.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Literal
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -25,8 +25,8 @@ from sqlalchemy.orm import Session
 
 from app.agents.duplicate import ComplaintSnapshot, DuplicateDetectionAgent
 from app.agents.pipeline import get_pipeline
+from app.api.deps import OfficerUser, SessionDep
 from app.core.logging import get_logger
-from app.database.session import get_session
 from app.models.complaint import Complaint
 from app.models.enums import ComplaintCategory, ComplaintStatus
 from app.models.status_history import ComplaintStatusHistory
@@ -35,9 +35,6 @@ from app.schemas.agent import DuplicateCandidate, DuplicateDetectionResult
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["duplicates"])
-
-#: ``Annotated`` keeps the ``Depends`` call out of an argument default (ruff B008).
-SessionDep = Annotated[Session, Depends(get_session)]
 
 DEFAULT_MATCH_LIMIT = 10
 MAX_MATCH_LIMIT = 50
@@ -164,7 +161,11 @@ class DuplicateReviewRequest(BaseModel):
         description="'approve' links the two complaints; 'reject' leaves them separate."
     )
     reviewer_id: uuid.UUID | None = Field(
-        default=None, description="The officer recording the decision, for the audit trail."
+        default=None,
+        description=(
+            "Optional; when given it must equal the authenticated officer's id. "
+            "The server always records the session's account for the audit trail."
+        ),
     )
     reason: str | None = None
     notes: str | None = None
@@ -251,7 +252,7 @@ def _database_unavailable(exc: SQLAlchemyError) -> HTTPException:
     ),
 )
 def analyze_for_duplicates(
-    payload: DuplicateAnalyzeRequest, session: SessionDep
+    payload: DuplicateAnalyzeRequest, session: SessionDep, officer: OfficerUser
 ) -> DuplicateDetectionResult:
     if payload.candidates:
         candidates = [candidate.to_snapshot() for candidate in payload.candidates]
@@ -285,6 +286,7 @@ def analyze_for_duplicates(
 def list_duplicate_matches(
     complaint_id: uuid.UUID,
     session: SessionDep,
+    officer: OfficerUser,
     limit: int = Query(DEFAULT_MATCH_LIMIT, ge=1, le=MAX_MATCH_LIMIT),
     offset: int = Query(0, ge=0),
     max_candidates: int = Query(DEFAULT_CANDIDATE_SCAN, ge=1, le=MAX_CANDIDATE_SCAN),
@@ -297,11 +299,25 @@ def list_duplicate_matches(
             )
         candidates = _load_stored_candidates(session, exclude_id=complaint_id, limit=max_candidates)
         result = _duplicate_agent().run(_snapshot_of(complaint), candidates)
+
+        items = result.matches[offset : offset + limit]
+        # The agent reports candidates by reference id only. The review endpoint
+        # takes the candidate's row id, so the identifiers are resolved here -
+        # on the officer-facing route only, so a citizen's submission response
+        # never carries another citizen's internal id.
+        if items:
+            rows = session.execute(
+                select(Complaint.reference_id, Complaint.id).where(
+                    Complaint.reference_id.in_(item.reference_id for item in items)
+                )
+            ).all()
+            identifiers = dict(rows)
+            for item in items:
+                item.complaint_id = identifiers.get(item.reference_id)
     except SQLAlchemyError as exc:
         session.rollback()
         raise _database_unavailable(exc) from exc
 
-    items = result.matches[offset : offset + limit]
     return DuplicateMatchesPage(
         complaint_id=complaint.id,
         reference_id=complaint.reference_id,
@@ -335,12 +351,20 @@ def list_duplicate_matches(
     ),
 )
 def review_duplicate_link(
-    complaint_id: uuid.UUID, payload: DuplicateReviewRequest, session: SessionDep
+    complaint_id: uuid.UUID,
+    payload: DuplicateReviewRequest,
+    session: SessionDep,
+    reviewer: OfficerUser,
 ) -> DuplicateReviewResult:
     if payload.candidate_id == complaint_id:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="a complaint cannot be a duplicate of itself",
+        )
+    if payload.reviewer_id is not None and payload.reviewer_id != reviewer.id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="the reviewer must be the authenticated officer",
         )
 
     try:
@@ -376,7 +400,7 @@ def review_duplicate_link(
             complaint_id=complaint.id,
             from_status=previous_status,
             to_status=target_status,
-            changed_by_user_id=payload.reviewer_id,
+            changed_by_user_id=reviewer.id,
             reason=payload.reason or default_reason,
             notes=payload.notes
             or f"candidate {candidate.reference_id}; match score {match.match_score:.2f}",

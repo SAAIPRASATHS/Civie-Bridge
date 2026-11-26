@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 
 from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -53,11 +54,11 @@ class Settings(BaseSettings):
     ollama_temperature: float = 0.0
     ollama_num_predict: int = 128
     ollama_keep_alive: str = "5m"
-    # Layers offloaded to the GPU. 0 forces CPU-only inference, which is
-    # required on hosts whose CUDA runtime fails to initialise the llama-server
-    # backend. Set to None to let Ollama decide, or to a layer count to
-    # partially offload.
-    ollama_num_gpu: int | None = 0
+    # Layers offloaded to the GPU. Left unset (None) so Ollama decides how many
+    # layers to place on the GPU - on this host that offloads the bulk of the
+    # model (verified ~25% CPU / 75% GPU on the RTX 3050). Set to 0 to force
+    # CPU-only inference, or to a layer count to cap the offload.
+    ollama_num_gpu: int | None = None
     # Optional vision-capable model for the evidence agent. Leave unset (or
     # empty) to run image analysis with OpenCV features only. When a
     # vision-capable model is pulled and named here, its description is
@@ -104,14 +105,49 @@ class Settings(BaseSettings):
     # one call; a caller may opt in per request.
     orchestration_interrupt_for_review: bool = False
 
+    # -- Authentication and authorisation (Phase 7) ------------------------
+    # The prototype ships with real server-side sessions because a role check
+    # performed only in the browser is not a role check at all. Every officer
+    # action endpoint resolves the caller from the signed session cookie.
+    auth_enabled: bool = True
+    #: HMAC key for the signed session cookie. The default keeps the prototype
+    #: runnable out of the box; set a long random value in any real deployment.
+    session_secret_key: str = "civicbridge-prototype-session-key-change-me"
+    session_cookie_name: str = "civicbridge_session"
+    session_ttl_seconds: int = 8 * 60 * 60
+    #: Send the cookie only over HTTPS. Left off for local http:// development.
+    session_cookie_secure: bool = False
+    session_cookie_samesite: str = "lax"
+    #: Known demo passwords for the synthetic accounts, so the reviewer can sign
+    #: in without a real account. They are not secrets and must be changed
+    #: before any non-prototype use.
+    auth_citizen_password: str = "citizen-demo-password"
+    auth_officer_password: str = "officer-demo-password"
+    auth_admin_password: str = "admin-demo-password"
+
+    # -- Uploads (Phase 7) -------------------------------------------------
+    #: Hard ceiling on one uploaded image, enforced before the bytes reach the
+    #: evidence agent.
+    max_upload_bytes: int = 8 * 1024 * 1024
+    #: Image types the prototype accepts; the declared type must also match the
+    #: bytes actually sniffed from the file.
+    allowed_upload_types: str = "image/jpeg,image/png,image/webp"
+    #: Browsers allowed to call the API with credentials. Kept as an explicit
+    #: list - never "*" - because cookies are sent with the request.
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
         """SQLAlchemy connection string (``DATABASE_URL`` wins when set)."""
         if self.database_url_override:
             return self.database_url_override
+        # Percent-encode the credentials: a password containing URL delimiters
+        # such as ``@`` or ``/`` would otherwise be parsed as part of the host.
+        user = quote(self.postgres_user, safe="")
+        password = quote(self.postgres_password, safe="")
         return (
-            f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+psycopg2://{user}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
@@ -128,6 +164,16 @@ class Settings(BaseSettings):
     @property
     def languages(self) -> list[str]:
         return [code.strip() for code in self.support_languages.split(",") if code.strip()]
+
+    @property
+    def allowed_upload_mime_types(self) -> list[str]:
+        """The MIME types accepted for an uploaded image."""
+        return [item.strip() for item in self.allowed_upload_types.split(",") if item.strip()]
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        """Explicit browser origins allowed to send credentialed requests."""
+        return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
 
 
 @lru_cache(maxsize=1)

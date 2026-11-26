@@ -27,30 +27,23 @@ from __future__ import annotations
 
 import base64
 import uuid
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
 
 from app.agents.duplicate import ComplaintSnapshot
 from app.agents.evidence import EvidenceImage
 from app.agents.workflow import WorkflowInputs, get_workflow
+from app.api.deps import AuthenticatedUser, OfficerUser
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.database.session import get_session
-from app.models.enums import UserRole
-from app.models.user import User
+from app.core.uploads import UploadValidationError, validate_image_upload
 from app.schemas.agent import ComplaintCategory
 from app.schemas.workflow import WorkflowRunResult
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/workflow", tags=["workflow"])
-
-#: ``Annotated`` keeps the ``Depends`` call out of an argument default (ruff B008).
-SessionDep = Annotated[Session, Depends(get_session)]
 
 #: Upper bound on the base64 payload of one image, so a request cannot exhaust
 #: memory before the evidence agent ever sees it (~8 MB of raw bytes).
@@ -112,7 +105,16 @@ class WorkflowImageInput(BaseModel):
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"content_base64 for {self.file_name!r} is not valid base64 data",
             ) from exc
-        return EvidenceImage.from_bytes(self.file_name, content)
+        try:
+            validated = validate_image_upload(
+                self.file_name, content, declared_type=self.content_type
+            )
+        except UploadValidationError as exc:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"the uploaded file {self.file_name!r} was rejected: {exc}",
+            ) from exc
+        return EvidenceImage.from_bytes(validated.file_name, validated.content)
 
 
 class WorkflowRunRequest(BaseModel):
@@ -166,14 +168,20 @@ class WorkflowRunRequest(BaseModel):
 class WorkflowResumeRequest(BaseModel):
     """An officer's acknowledgement of a paused run.
 
-    The reviewer is validated as a real officer or administrator. The note is
-    recorded as an acknowledgement only; it authorises no consequential action.
+    The reviewer is resolved from the authenticated session, never trusted from
+    the body: ``reviewer_id`` is accepted only as a consistency check against
+    the signed-in caller. The note is an acknowledgement only; it authorises no
+    consequential action.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    reviewer_id: uuid.UUID = Field(
-        description="The officer or administrator acknowledging the review checkpoint."
+    reviewer_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Optional; when given it must equal the authenticated officer's id. "
+            "The server always records the session's account as the reviewer."
+        ),
     )
     note: str | None = None
 
@@ -189,27 +197,6 @@ def _ensure_enabled() -> None:
             status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="the orchestration workflow is disabled by configuration",
         )
-
-
-def _authorise_reviewer(session: Session, reviewer_id: uuid.UUID) -> User:
-    """Confirm the reviewer exists and may approve; a citizen may not."""
-    try:
-        reviewer = session.get(User, reviewer_id)
-    except SQLAlchemyError as exc:
-        session.rollback()
-        logger.warning("Workflow resume database error: %s", exc)
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"database unavailable: {type(exc).__name__}",
-        ) from exc
-    if reviewer is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f"reviewer {reviewer_id} not found")
-    if reviewer.role is UserRole.CITIZEN:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail="only an officer or administrator may acknowledge a review checkpoint",
-        )
-    return reviewer
 
 
 # ---------------------------------------------------------------------------
@@ -228,11 +215,13 @@ def _authorise_reviewer(session: Session, reviewer_id: uuid.UUID) -> User:
         "duplicate matches, the recommendations, the workflow status, the review "
         "requirements and any degraded-mode details. The workflow performs no "
         "consequential action: assignment, duplicate linking, resolution, "
-        "rejection and closure all remain human decisions."
+        "rejection and closure all remain human decisions. Requires a signed-in "
+        "account; the citizen and officer portals both use this endpoint."
     ),
 )
-def run_workflow(payload: WorkflowRunRequest) -> WorkflowRunResult:
+def run_workflow(payload: WorkflowRunRequest, user: AuthenticatedUser) -> WorkflowRunResult:
     _ensure_enabled()
+    logger.info("Workflow run requested by account %s", user.id)
     inputs = payload.to_inputs()
     workflow = get_workflow()
     return workflow.invoke(
@@ -250,17 +239,21 @@ def run_workflow(payload: WorkflowRunRequest) -> WorkflowRunResult:
     summary="Resume a paused workflow run (human acknowledgement)",
     description=(
         "Resumes a run that paused at the human-review checkpoint and returns "
-        "the assembled result. The reviewer is validated as an officer or "
-        "administrator; a citizen is refused. Resuming records an "
-        "acknowledgement only - it never authorises an assignment, a duplicate "
-        "merge, a rejection, a resolution or a closure."
+        "the assembled result. Only an officer or administrator may resume; a "
+        "citizen is refused by the server before the handler runs. Resuming "
+        "records an acknowledgement only - it never authorises an assignment, a "
+        "duplicate merge, a rejection, a resolution or a closure."
     ),
 )
 def resume_workflow(
-    workflow_run_id: str, payload: WorkflowResumeRequest, session: SessionDep
+    workflow_run_id: str, payload: WorkflowResumeRequest, reviewer: OfficerUser
 ) -> WorkflowRunResult:
     _ensure_enabled()
-    reviewer = _authorise_reviewer(session, payload.reviewer_id)
+    if payload.reviewer_id is not None and payload.reviewer_id != reviewer.id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="the reviewer must be the authenticated officer",
+        )
     workflow = get_workflow()
     return workflow.resume(
         workflow_run_id=workflow_run_id,

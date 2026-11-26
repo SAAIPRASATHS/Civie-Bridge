@@ -21,18 +21,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
 
 from app.agents.resolution import ResolutionAgent, ResolutionInput
 from app.agents.routing import RoutingAgent, RoutingInput
+from app.api.deps import OfficerUser, SessionDep
 from app.core.logging import get_logger
-from app.database.session import get_session
 from app.models.assignment import ComplaintAssignment
 from app.models.complaint import Complaint
 from app.models.department import Department
@@ -40,19 +39,14 @@ from app.models.enums import (
     AssignmentApprovalStatus,
     ComplaintCategory,
     ComplaintStatus,
-    UserRole,
 )
 from app.models.officer import Officer
 from app.models.status_history import ComplaintStatusHistory
-from app.models.user import User
 from app.schemas.agent import ResolutionRecommendation, RoutingRecommendation
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["routing"])
-
-#: ``Annotated`` keeps the ``Depends`` call out of an argument default (ruff B008).
-SessionDep = Annotated[Session, Depends(get_session)]
 
 #: Both agents are deterministic and hold no model client, so one instance each
 #: is enough for the whole process.
@@ -123,8 +117,12 @@ class RoutingDecisionRequest(BaseModel):
     decision: Literal["approve", "reject"] = Field(
         description="'approve' assigns the complaint; 'reject' leaves it unassigned."
     )
-    reviewer_id: uuid.UUID = Field(
-        description="The officer or administrator recording the decision, for the audit trail."
+    reviewer_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Optional; when given it must equal the authenticated officer's id. "
+            "The server always records the session's account for the audit trail."
+        ),
     )
     officer_id: uuid.UUID | None = Field(
         default=None, description="Optionally assign a specific officer within the department."
@@ -221,7 +219,7 @@ def recommend_routing(payload: RoutingRecommendRequest) -> RoutingRecommendation
     ),
 )
 def get_routing_recommendation(
-    complaint_id: uuid.UUID, session: SessionDep
+    complaint_id: uuid.UUID, session: SessionDep, officer: OfficerUser
 ) -> RoutingRecommendation:
     try:
         complaint = session.get(Complaint, complaint_id)
@@ -250,19 +248,16 @@ def get_routing_recommendation(
     ),
 )
 def decide_routing(
-    complaint_id: uuid.UUID, payload: RoutingDecisionRequest, session: SessionDep
+    complaint_id: uuid.UUID,
+    payload: RoutingDecisionRequest,
+    session: SessionDep,
+    reviewer: OfficerUser,
 ) -> RoutingDecisionResult:
     try:
-        reviewer = session.get(User, payload.reviewer_id)
-        if reviewer is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail=f"reviewer {payload.reviewer_id} not found",
-            )
-        if reviewer.role is UserRole.CITIZEN:
+        if payload.reviewer_id is not None and payload.reviewer_id != reviewer.id:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
-                detail="only an officer or administrator may decide a routing recommendation",
+                detail="the reviewer must be the authenticated officer",
             )
 
         complaint = session.get(Complaint, complaint_id)

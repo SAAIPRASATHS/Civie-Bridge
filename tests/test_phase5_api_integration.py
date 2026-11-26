@@ -106,8 +106,18 @@ requires_citizen = pytest.mark.skipif(
 
 
 @pytest.fixture()
-def client() -> TestClient:
-    """The routing and resolution endpoints are deterministic; no model is needed."""
+def client(as_officer) -> TestClient:
+    """The routing and resolution agents are deterministic; no model is needed.
+
+    The stored-complaint and decision endpoints require an officer, so the
+    client is served as one; the server still performs the role check.
+    """
+    return TestClient(app)
+
+
+@pytest.fixture()
+def citizen_client(as_citizen) -> TestClient:
+    """A client served as a signed-in citizen, to prove the officer guard refuses."""
     return TestClient(app)
 
 
@@ -352,14 +362,14 @@ def test_recommendation_endpoints_do_not_assign_anything(client: TestClient) -> 
 @requires_database
 @requires_seeded_data
 @requires_officer
-def test_decision_approve_assigns_and_records_audit(client: TestClient) -> None:
+def test_decision_approve_assigns_and_records_audit(client: TestClient, officer_user) -> None:
     complaint_id = _persist_complaint()
     try:
         response = client.post(
             f"/api/complaints/{complaint_id}/routing/decision",
             json={
                 "decision": "approve",
-                "reviewer_id": str(_SEEDED_OFFICER),
+                "reviewer_id": str(officer_user.id),
                 "reason": "correct department for a waste complaint",
             },
         )
@@ -383,7 +393,7 @@ def test_decision_approve_assigns_and_records_audit(client: TestClient) -> None:
 
             assignment = session.get(ComplaintAssignment, uuid.UUID(body["assignment_id"]))
             assert assignment.approval_status is AssignmentApprovalStatus.APPROVED
-            assert assignment.approved_by_user_id == _SEEDED_OFFICER
+            assert assignment.approved_by_user_id == officer_user.id
             assert assignment.approved_at is not None
             assert assignment.ai_explanation
             assert assignment.ai_confidence is not None
@@ -400,7 +410,7 @@ def test_decision_approve_assigns_and_records_audit(client: TestClient) -> None:
             assert len(history) == 1
             assert history[0].from_status is ComplaintStatus.SUBMITTED
             assert history[0].to_status is ComplaintStatus.ASSIGNED
-            assert history[0].changed_by_user_id == _SEEDED_OFFICER
+            assert history[0].changed_by_user_id == officer_user.id
         finally:
             session.close()
     finally:
@@ -410,14 +420,14 @@ def test_decision_approve_assigns_and_records_audit(client: TestClient) -> None:
 @requires_database
 @requires_seeded_data
 @requires_officer
-def test_decision_reject_leaves_the_complaint_unchanged(client: TestClient) -> None:
+def test_decision_reject_leaves_the_complaint_unchanged(client: TestClient, officer_user) -> None:
     complaint_id = _persist_complaint()
     try:
         response = client.post(
             f"/api/complaints/{complaint_id}/routing/decision",
             json={
                 "decision": "reject",
-                "reviewer_id": str(_SEEDED_OFFICER),
+                "reviewer_id": str(officer_user.id),
                 "reason": "wrong ward, needs manual triage",
             },
         )
@@ -461,12 +471,12 @@ def test_decision_reject_leaves_the_complaint_unchanged(client: TestClient) -> N
 @requires_database
 @requires_seeded_data
 @requires_officer
-def test_decision_is_not_resolved_or_closed(client: TestClient) -> None:
+def test_decision_is_not_resolved_or_closed(client: TestClient, officer_user) -> None:
     complaint_id = _persist_complaint()
     try:
         response = client.post(
             f"/api/complaints/{complaint_id}/routing/decision",
-            json={"decision": "approve", "reviewer_id": str(_SEEDED_OFFICER)},
+            json={"decision": "approve", "reviewer_id": str(officer_user.id)},
         )
 
         assert response.status_code == 200
@@ -483,12 +493,12 @@ def test_decision_is_not_resolved_or_closed(client: TestClient) -> None:
 @requires_database
 @requires_seeded_data
 @requires_officer
-def test_decision_cannot_assign_a_resolved_complaint(client: TestClient) -> None:
+def test_decision_cannot_assign_a_resolved_complaint(client: TestClient, officer_user) -> None:
     complaint_id = _persist_complaint(status=ComplaintStatus.RESOLVED)
     try:
         response = client.post(
             f"/api/complaints/{complaint_id}/routing/decision",
-            json={"decision": "approve", "reviewer_id": str(_SEEDED_OFFICER)},
+            json={"decision": "approve", "reviewer_id": str(officer_user.id)},
         )
 
         assert response.status_code == 409
@@ -507,12 +517,14 @@ def test_decision_cannot_assign_a_resolved_complaint(client: TestClient) -> None
 @requires_database
 @requires_seeded_data
 @requires_officer
-def test_decision_without_a_department_recommendation_is_409(client: TestClient) -> None:
+def test_decision_without_a_department_recommendation_is_409(
+    client: TestClient, officer_user
+) -> None:
     complaint_id = _persist_complaint(category=None)
     try:
         response = client.post(
             f"/api/complaints/{complaint_id}/routing/decision",
-            json={"decision": "approve", "reviewer_id": str(_SEEDED_OFFICER)},
+            json={"decision": "approve", "reviewer_id": str(officer_user.id)},
         )
 
         assert response.status_code == 409
@@ -528,12 +540,12 @@ def test_decision_without_a_department_recommendation_is_409(client: TestClient)
 @requires_database
 @requires_seeded_data
 @requires_citizen
-def test_decision_by_a_citizen_is_forbidden(client: TestClient) -> None:
+def test_decision_by_a_citizen_is_forbidden(citizen_client: TestClient) -> None:
     complaint_id = _persist_complaint()
     try:
-        response = client.post(
+        response = citizen_client.post(
             f"/api/complaints/{complaint_id}/routing/decision",
-            json={"decision": "approve", "reviewer_id": str(_SEEDED_CITIZEN)},
+            json={"decision": "approve"},
         )
 
         assert response.status_code == 403
@@ -551,7 +563,10 @@ def test_decision_by_a_citizen_is_forbidden(client: TestClient) -> None:
 
 @requires_database
 @requires_seeded_data
-def test_decision_with_an_unknown_reviewer_is_404(client: TestClient) -> None:
+@requires_officer
+def test_decision_with_a_mismatched_reviewer_is_forbidden(client: TestClient, officer_user) -> None:
+    # The reviewer is taken from the session; a body that names a different
+    # account is refused rather than silently overridden.
     complaint_id = _persist_complaint()
     try:
         response = client.post(
@@ -559,7 +574,7 @@ def test_decision_with_an_unknown_reviewer_is_404(client: TestClient) -> None:
             json={"decision": "approve", "reviewer_id": str(uuid.uuid4())},
         )
 
-        assert response.status_code == 404
+        assert response.status_code == 403
     finally:
         _purge(complaint_id)
 
@@ -571,7 +586,7 @@ def test_decision_with_an_invalid_decision_is_422(client: TestClient) -> None:
     try:
         response = client.post(
             f"/api/complaints/{complaint_id}/routing/decision",
-            json={"decision": "maybe", "reviewer_id": str(_SEEDED_OFFICER or uuid.uuid4())},
+            json={"decision": "maybe"},
         )
 
         assert response.status_code == 422
@@ -579,19 +594,46 @@ def test_decision_with_an_invalid_decision_is_422(client: TestClient) -> None:
         _purge(complaint_id)
 
 
-def test_decision_without_a_reviewer_is_422(client: TestClient) -> None:
-    response = client.post(
-        f"/api/complaints/{uuid.uuid4()}/routing/decision",
-        json={"decision": "approve"},
-    )
+@requires_database
+@requires_seeded_data
+@requires_officer
+def test_decision_without_a_reviewer_uses_the_session_account(
+    client: TestClient, officer_user
+) -> None:
+    # ``reviewer_id`` is optional: the server records the authenticated account.
+    complaint_id = _persist_complaint()
+    try:
+        response = client.post(
+            f"/api/complaints/{complaint_id}/routing/decision",
+            json={"decision": "approve"},
+        )
 
-    assert response.status_code == 422
+        assert response.status_code == 200
+        assert response.json()["assigned"] is True
+
+        session = get_session_factory()()
+        try:
+            history = (
+                session.execute(
+                    select(ComplaintStatusHistory).where(
+                        ComplaintStatusHistory.complaint_id == complaint_id
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert len(history) == 1
+            assert history[0].changed_by_user_id == officer_user.id
+        finally:
+            session.close()
+    finally:
+        _purge(complaint_id)
 
 
 def test_decision_rejects_unknown_fields(client: TestClient) -> None:
     response = client.post(
         f"/api/complaints/{uuid.uuid4()}/routing/decision",
-        json={"decision": "approve", "reviewer_id": str(uuid.uuid4()), "auto_close": True},
+        json={"decision": "approve", "auto_close": True},
     )
 
     assert response.status_code == 422
@@ -601,7 +643,7 @@ def test_decision_rejects_unknown_fields(client: TestClient) -> None:
 def test_decision_with_an_unknown_complaint_is_404(client: TestClient) -> None:
     response = client.post(
         f"/api/complaints/{uuid.uuid4()}/routing/decision",
-        json={"decision": "approve", "reviewer_id": str(_SEEDED_OFFICER or uuid.uuid4())},
+        json={"decision": "approve"},
     )
 
     assert response.status_code == 404

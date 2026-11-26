@@ -246,8 +246,18 @@ def _purge(*complaint_ids: uuid.UUID) -> None:
 
 
 @pytest.fixture()
-def client() -> TestClient:
-    """The API endpoints; a deterministic workflow is injected per test."""
+def client(as_officer) -> TestClient:
+    """The API endpoints; a deterministic workflow is injected per test.
+
+    ``/run`` accepts any signed-in account and ``/resume`` requires an officer,
+    so the client is served as an officer; the server still enforces the role.
+    """
+    return TestClient(app)
+
+
+@pytest.fixture()
+def citizen_client(as_citizen) -> TestClient:
+    """A client served as a signed-in citizen, to prove the resume guard refuses."""
     return TestClient(app)
 
 
@@ -809,41 +819,40 @@ def test_run_endpoint_persists_once_and_never_writes_the_audit_trail(
 @requires_database
 @requires_citizen
 def test_a_citizen_cannot_resume_a_review_checkpoint(
-    client: TestClient,
+    citizen_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     deterministic_workflow: ComplaintWorkflow,
 ) -> None:
     monkeypatch.setattr("app.api.workflow.get_workflow", lambda: deterministic_workflow)
 
-    response = client.post(
-        "/api/v1/workflow/wf-unused/resume",
-        json={"reviewer_id": str(_SEEDED_CITIZEN)},
-    )
+    response = citizen_client.post("/api/v1/workflow/wf-unused/resume", json={})
 
     assert response.status_code == 403
     assert "officer" in response.json()["detail"]
 
 
 @requires_database
-def test_an_unknown_reviewer_cannot_resume_a_review_checkpoint(
+@requires_officer
+def test_a_reviewer_who_differs_from_the_session_is_refused(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     deterministic_workflow: ComplaintWorkflow,
 ) -> None:
     monkeypatch.setattr("app.api.workflow.get_workflow", lambda: deterministic_workflow)
 
+    # The reviewer is the authenticated account; naming another one is refused.
     response = client.post(
         "/api/v1/workflow/wf-unused/resume",
         json={"reviewer_id": str(uuid.uuid4())},
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 403
 
 
 @requires_database
 @requires_officer
 def test_an_officer_resume_records_an_acknowledgement_only(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, officer_user, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     workflow = _workflow(use_llm=False)
     run_id = f"wf-officer-{uuid.uuid4().hex[:8]}"
@@ -859,7 +868,7 @@ def test_an_officer_resume_records_an_acknowledgement_only(
     monkeypatch.setattr("app.api.workflow.get_workflow", lambda: workflow)
     response = client.post(
         f"/api/v1/workflow/{run_id}/resume",
-        json={"reviewer_id": str(_SEEDED_OFFICER), "note": "reviewed the checkpoint"},
+        json={"reviewer_id": str(officer_user.id), "note": "reviewed the checkpoint"},
     )
 
     assert response.status_code == 200

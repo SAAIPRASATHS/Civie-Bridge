@@ -26,17 +26,16 @@ from __future__ import annotations
 
 import base64
 import uuid
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
 
 from app.agents.evidence import EvidenceAnalysisAgent, EvidenceImage
 from app.agents.pipeline import get_pipeline
+from app.api.deps import OFFICER_ROLES, AuthenticatedUser, SessionDep
 from app.core.logging import get_logger
-from app.database.session import get_session
+from app.core.uploads import UploadValidationError, validate_image_upload
 from app.models.complaint import Complaint
 from app.models.complaint_evidence import ComplaintEvidence
 from app.models.enums import ComplaintCategory
@@ -45,9 +44,6 @@ from app.schemas.agent import EvidenceAnalysisResult
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/evidence", tags=["evidence"])
-
-#: ``Annotated`` keeps the ``Depends`` call out of an argument default (ruff B008).
-SessionDep = Annotated[Session, Depends(get_session)]
 
 
 class EvidenceAnalyzeRequest(BaseModel):
@@ -115,7 +111,7 @@ def _evidence_agent() -> EvidenceAnalysisAgent:
     ),
 )
 def analyze_evidence(
-    payload: EvidenceAnalyzeRequest, session: SessionDep
+    payload: EvidenceAnalyzeRequest, session: SessionDep, user: AuthenticatedUser
 ) -> EvidenceAnalysisResponse:
     try:
         content = base64.b64decode(payload.content_base64, validate=True)
@@ -125,7 +121,17 @@ def analyze_evidence(
             detail="content_base64 is not valid base64-encoded data",
         ) from exc
 
-    image = EvidenceImage.from_bytes(payload.file_name, content)
+    try:
+        upload = validate_image_upload(
+            payload.file_name, content, declared_type=payload.content_type
+        )
+    except UploadValidationError as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"the uploaded file {payload.file_name!r} was rejected: {exc}",
+        ) from exc
+
+    image = EvidenceImage.from_bytes(upload.file_name, upload.content)
     analysis = _evidence_agent().run(
         image, category=payload.category, complaint_text=payload.complaint_text
     )
@@ -143,13 +149,21 @@ def analyze_evidence(
                 status.HTTP_404_NOT_FOUND,
                 detail=f"complaint {payload.complaint_id} not found",
             )
+        # A citizen may only attach evidence to their own complaint. A missing
+        # complaint and someone else's complaint both answer 404 so the endpoint
+        # cannot be used to probe which identifiers exist.
+        if user.role not in OFFICER_ROLES and complaint.citizen_id != user.id:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail=f"complaint {payload.complaint_id} not found",
+            )
 
         evidence = ComplaintEvidence(
             complaint_id=complaint.id,
-            file_name=payload.file_name,
-            storage_path=payload.storage_reference or payload.file_name,
-            mime_type=payload.content_type,
-            file_size_bytes=len(content) or None,
+            file_name=upload.file_name,
+            storage_path=payload.storage_reference or upload.file_name,
+            mime_type=upload.mime_type,
+            file_size_bytes=upload.size_bytes or None,
             caption=payload.complaint_text,
             verification_status=analysis.verification_status,
             relevance_score=analysis.relevance_score,
