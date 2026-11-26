@@ -38,6 +38,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.agents.evidence import EvidenceImage
 from app.agents.persistence import generate_reference_id, persist_analysis
+from app.agents.routing import RoutingAgent, RoutingInput
 from app.agents.workflow import WorkflowInputs, get_workflow
 from app.api.deps import CitizenUser, SessionDep
 from app.core.logging import get_logger
@@ -70,6 +71,10 @@ router = APIRouter(prefix="/api/citizen", tags=["citizen"])
 #: How many stored complaints are read as duplicate-detection candidates when a
 #: citizen submits. Bounded so one submission cannot scan the whole table.
 CANDIDATE_SCAN_LIMIT = 100
+
+#: The routing agent is deterministic and holds no model client, so one instance
+#: serves the whole process - the same kind of instance the officer view uses.
+_ROUTING_AGENT = RoutingAgent()
 
 #: Repeated wherever the AI block is surfaced, so no reader mistakes a
 #: suggestion for a decision that has already been taken.
@@ -353,18 +358,26 @@ def _analysis_from_logs(session, complaint: Complaint) -> WorkflowRunResult | No
 
 
 def _persist_minimal(
-    session, payload: ComplaintSubmissionRequest, citizen_id: uuid.UUID
+    session,
+    payload: ComplaintSubmissionRequest,
+    citizen_id: uuid.UUID,
+    intake: IntakeResult | None = None,
 ) -> Complaint:
     """Record the citizen's complaint even when the agent pipeline was unusable.
 
     The complaint text is stored verbatim and the row is left unclassified; the
-    officer dashboard shows it as needing manual triage.
+    officer dashboard shows it as needing manual triage. When the intake agent
+    did run, its detected language and clarification need are persisted too, so a
+    Tamil (or transliterated) complaint is not silently recorded as English.
     """
+    detected_language = (
+        payload.language or (intake.language if intake else None) or ComplaintLanguage.EN
+    )
     complaint = Complaint(
         reference_id=generate_reference_id(session),
         citizen_id=citizen_id,
         description=payload.text,
-        language=payload.language or ComplaintLanguage.EN,
+        language=detected_language,
         location_text=payload.location_text,
         ward=payload.ward,
         latitude=payload.latitude,
@@ -373,9 +386,33 @@ def _persist_minimal(
         category=payload.category,
         is_synthetic=False,
     )
+    if intake is not None:
+        complaint.needs_clarification = intake.needs_clarification
+        if intake.clarification_questions:
+            complaint.clarification_question = intake.clarification_questions[0]
     session.add(complaint)
     session.flush()
     return complaint
+
+
+def _routing_for(complaint: Complaint) -> RoutingRecommendation:
+    """The live routing recommendation for a stored complaint.
+
+    Computed from the same stored fields the officer view reads, so the citizen's
+    submission response and the officer's detail agree. It is used only to fill
+    the gap when the orchestration workflow did not itself produce a
+    recommendation - for example a complaint it sent straight to human review.
+    """
+    return _ROUTING_AGENT.run(
+        RoutingInput(
+            text=complaint.normalized_description or complaint.description,
+            category=complaint.category,
+            ward=complaint.ward,
+            location_text=complaint.location_text,
+            latitude=complaint.latitude,
+            longitude=complaint.longitude,
+        )
+    )
 
 
 def _record_initial_history(session, complaint: Complaint) -> None:
@@ -517,7 +554,7 @@ def submit_complaint(
                 complaint.language = payload.language
             _record_evidence(session, complaint, result.evidence, uploads)
         else:
-            complaint = _persist_minimal(session, payload, citizen.id)
+            complaint = _persist_minimal(session, payload, citizen.id, intake=result.intake)
             if payload.evidence:
                 logger.info("Evidence analysis skipped; the agent pipeline was unusable")
 
@@ -527,6 +564,13 @@ def submit_complaint(
     except SQLAlchemyError as exc:
         session.rollback()
         raise _database_unavailable(exc) from exc
+
+    if result.routing is None:
+        # The workflow short-circuited to human review without ever routing (for
+        # example a complaint flagged for review, or too thin to classify), yet
+        # the officer view still shows a recommendation. Populate the same one
+        # here from the stored complaint so the two responses agree.
+        result = result.model_copy(update={"routing": _routing_for(complaint)})
 
     logger.info(
         "Citizen %s recorded complaint %s (outcome=%s)",

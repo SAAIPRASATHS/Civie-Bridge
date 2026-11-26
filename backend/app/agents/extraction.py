@@ -157,6 +157,25 @@ _LOCATION_HINTS: tuple[str, ...] = (
     "முன்பு",
 )
 
+
+def _hint_pattern(hint: str) -> re.Pattern[str]:
+    """Compile one location hint with the matching rule its script needs.
+
+    Latin hints are short prepositions, so they must match on a word boundary:
+    without one, ``"in"`` matches inside ``"bin"`` and everything after it is
+    swallowed as an address. Tamil agglutinates - a locative hint such as
+    அருகில் is a suffix of longer words - so Tamil hints stay substring matches.
+    """
+    escaped = re.escape(hint)
+    if hint.isascii():
+        return re.compile(rf"(?<![a-z]){escaped}(?![a-z])")
+    return re.compile(escaped)
+
+
+_LOCATION_HINT_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
+    _hint_pattern(hint) for hint in _LOCATION_HINTS
+)
+
 #: Street furniture / place words that make a phrase a usable address.
 _LOCATION_NOUNS: tuple[str, ...] = (
     "street",
@@ -218,14 +237,9 @@ def extract_location_phrase(text: str) -> str | None:
 
     lowered = text.lower()
     best: str | None = None
-    for hint in _LOCATION_HINTS:
-        start = 0
-        while True:
-            index = lowered.find(hint, start)
-            if index == -1:
-                break
-            start = index + len(hint)
-            tail = text[index + len(hint) :]
+    for pattern in _LOCATION_HINT_PATTERNS:
+        for match in pattern.finditer(lowered):
+            tail = text[match.end() :]
             phrase = _clean_phrase(tail)
             if phrase and _contains_place_noun(phrase) and len(phrase) > len(best or ""):
                 best = phrase
@@ -305,6 +319,11 @@ def location_is_specific(phrase: str | None, source: str) -> bool:
 _TAMIL_CHAR_RANGE = (0x0B80, 0x0BFF)
 
 
+def has_tamil_script(text: str | None) -> bool:
+    """Whether ``text`` contains at least one Tamil-script character."""
+    return any(_TAMIL_CHAR_RANGE[0] <= ord(char) <= _TAMIL_CHAR_RANGE[1] for char in (text or ""))
+
+
 def grounding_ratio(candidate: str, source: str) -> float:
     """How much of ``candidate`` is traceable to ``source`` (0.0 - 1.0).
 
@@ -323,7 +342,7 @@ def grounding_ratio(candidate: str, source: str) -> float:
     token_hits = sum(1 for token in candidate_tokens if token in source_tokens)
     token_ratio = token_hits / len(candidate_tokens)
 
-    if any(_TAMIL_CHAR_RANGE[0] <= ord(char) <= _TAMIL_CHAR_RANGE[1] for char in candidate):
+    if has_tamil_script(candidate):
         source_chars = {char for char in source_norm if char.strip()}
         candidate_chars = [char for char in candidate_norm if char.strip()]
         char_ratio = sum(1 for char in candidate_chars if char in source_chars) / len(

@@ -167,6 +167,30 @@ def test_model_invented_location_and_landmark_are_discarded() -> None:
     assert any(item.startswith("landmark:") for item in result.unsupported_details_dropped)
 
 
+def test_grounded_but_non_address_location_is_discarded() -> None:
+    """A grounded phrase that is not an address must not become the location.
+
+    "my house" is traceable to the citizen's wording, so grounding alone accepts
+    it, but it names no place a field crew could be sent to. The model candidate
+    must still be dropped and the location left null.
+    """
+    source = "Street light not working near my house"
+    fake = ScriptedLlm(
+        [
+            _payload(
+                normalized_description="The street light near my house is not working.",
+                location_text="my house",
+            )
+        ]
+    )
+
+    result = IntakeAgent(llm=fake, use_llm=True).run(source)
+
+    assert result.llm_used is True
+    assert result.location_text is None
+    assert "location:my house" in result.unsupported_details_dropped
+
+
 def test_model_invented_duration_is_discarded() -> None:
     source = "There is a problem outside my house."
     fake = ScriptedLlm(

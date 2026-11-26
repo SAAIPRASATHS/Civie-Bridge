@@ -1,0 +1,129 @@
+﻿[1/22] nat-water-01 ...
+python : C:\Users\sssaa\AppData\Roaming\Python\Python311\site-packages\requests\__init__.py:109: 
+RequestsDependencyWarning: urllib3 (2.5.0) or chardet (6.0.0.post1)/charset_normalizer (3.4.4) doesn't match a 
+supported version!
+At line:15 char:1782
++ ... M = 'dumb'; python scripts/ws1_tamil_eval.py --report scripts/ws1_tam ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\sssaa\...ported version!:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  warnings.warn(
+[2/22] nat-waste-01 ...
+[3/22] nat-light-01 ...
+[4/22] nat-road-01 ...
+[5/22] nat-loc-01 ...
+[6/22] rom-water-01 ...
+[7/22] rom-waste-01 ...
+[8/22] rom-road-01 ...
+[9/22] rom-light-01 ...
+2026-11-26 19:20:51 | INFO     | app.agents.intake | Requesting intake JSON repair (attempt 1): 1 validation error for 
+_IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['streetlight'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+2026-11-26 19:21:01 | WARNING  | app.agents.intake | Intake agent fell back to deterministic output: intake output 
+failed validation after 2 attempt(s): 1 validation error for _IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['streetlight'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+[10/22] rom-water-02 ...
+2026-11-26 19:21:26 | INFO     | app.agents.intake | Requesting intake JSON repair (attempt 1): 1 validation error for 
+_IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['water_leak'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+2026-11-26 19:21:36 | WARNING  | app.agents.intake | Intake agent fell back to deterministic output: intake output 
+failed validation after 2 attempt(s): 1 validation error for _IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['water_leak'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+[11/22] mix-water-01 ...
+2026-11-26 19:21:59 | INFO     | app.agents.intake | Requesting intake JSON repair (attempt 1): 1 validation error for 
+_IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['water leakage'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+2026-11-26 19:22:10 | WARNING  | app.agents.intake | Intake agent fell back to deterministic output: intake output 
+failed validation after 2 attempt(s): 1 validation error for _IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['water leakage'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+[12/22] mix-light-01 ...
+2026-11-26 19:22:34 | INFO     | app.agents.intake | Requesting intake JSON repair (attempt 1): 1 validation error for 
+_IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['street_light'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+2026-11-26 19:22:44 | WARNING  | app.agents.intake | Intake agent fell back to deterministic output: intake output 
+failed validation after 2 attempt(s): 1 validation error for _IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['street_light'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+[13/22] mix-waste-01 ...
+2026-11-26 19:23:08 | INFO     | app.agents.intake | Requesting intake JSON repair (attempt 1): 1 validation error for 
+_IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['Public Health', 'Sanitation'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+2026-11-26 19:23:19 | WARNING  | app.agents.intake | Intake agent fell back to deterministic output: intake output 
+failed validation after 2 attempt(s): 1 validation error for _IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['Public Health', 'Sanitation'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+[14/22] mix-light-02 ...
+[15/22] miss-waste-01 ...
+2026-11-26 19:24:11 | INFO     | app.agents.intake | Requesting intake JSON repair (attempt 1): 1 validation error for 
+_IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['water_supply'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+2026-11-26 19:24:23 | WARNING  | app.agents.intake | Intake agent fell back to deterministic output: intake output 
+failed validation after 2 attempt(s): 1 validation error for _IntakeDraft
+problem_type
+  Input should be a valid string [type=string_type, input_value=['water_supply'], input_type=list]
+    For further information visit https://errors.pydantic.dev/2.10/v/string_type
+[16/22] miss-water-01 ...
+[17/22] miss-light-01 ...
+2026-11-26 19:25:27 | WARNING  | app.services.ollama_service | Ollama health check failed: Ollama HTTP error: 
+ReadTimeout: timed out
+2026-11-26 19:25:27 | WARNING  | app.agents.llm_client | LLM unavailable (Ollama HTTP error: ReadTimeout: timed out); 
+agents will use the deterministic fallback.
+[18/22] miss-road-01 ...
+[19/22] miss-waste-02 ...
+[20/22] multi-01 ...
+[21/22] multi-02 ...
+[22/22] multi-03 ...
+id            group               lang    category          loc                     norm llm       ms
+-----------------------------------------------------------------------------------------------------
+nat-water-01  native_tamil        ta      water_supply      -                       Y    Y   135991.5
+nat-waste-01  native_tamil        ta      waste_management  வார்டு 10               Y    Y    31504.2
+nat-light-01  native_tamil        ta      street_lighting   -                       n    Y    29057.8
+nat-road-01   native_tamil        ta      road_maintenance  -                       n    Y    34658.0
+nat-loc-01    native_tamil        ta      road_maintenance  அண்ணா நகர் பேருந்து நி  n    Y    32420.6
+rom-water-01  romanised_tamil     ta-latn water_supply      -                       Y    Y    26213.3
+rom-waste-01  romanised_tamil     ta-latn waste_management  kuppai theru            Y    Y    29764.9
+rom-road-01   romanised_tamil     ta-latn road_maintenance  Anna Nagar la road      Y    Y    26437.9
+rom-light-01  romanised_tamil     ta-latn street_lighting   -                       Y    Y    35790.2
+rom-water-02  romanised_tamil     ta-latn water_supply      -                       Y    Y    33168.8
+mix-water-01  mixed_tamil_english en      water_supply      -                       Y    Y    34714.8
+mix-light-01  mixed_tamil_english en      street_lighting   -                       Y    Y    33554.3
+mix-waste-01  mixed_tamil_english ta-latn waste_management  overflow aaguthu ward   Y    Y    35824.8
+mix-light-02  mixed_tamil_english ta      water_supply      -                       Y    Y    25856.8
+miss-waste-01 missing_location    ta-latn waste_management  -                       Y    Y    41075.4
+miss-water-01 missing_location    ta-latn water_supply      -                       Y    Y    40982.3
+miss-light-01 missing_location    ta      street_lighting   -                       n    n     8857.7
+miss-road-01  missing_location    ta-latn road_maintenance  -                       Y    n        0.8
+miss-waste-02 missing_location    en      waste_management  -                       Y    n        0.7
+multi-01      multiple_issues     ta-latn water_supply      -                       Y    n        1.2
+multi-02      multiple_issues     ta-latn water_supply      -                       Y    n        2.2
+multi-03      multiple_issues     en      waste_management  -                       Y    n        1.5
+
+PASS  transliteration_classification: 5/5 = 1.00 (target >= 0.80)
+FAIL  location_extraction: 9/13 = 0.69 (target >= 0.90) (strictly correct non-null: 1)
+FAIL  english_normalisation: 15/18 = 0.83 (target >= 0.90)
+
+info  language_detection: 22/22 = 1.00
+info  category_accuracy: 22/22 = 1.00
+
+Report written to scripts\ws1_tamil_eval_report_llm.json

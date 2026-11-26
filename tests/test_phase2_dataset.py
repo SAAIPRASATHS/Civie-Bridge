@@ -200,13 +200,16 @@ requires_dataset = pytest.mark.skipif(
 
 @requires_dataset
 def test_stored_dataset_meets_minimum_size() -> None:
-    total = _stored_complaint_count()
-    assert total >= 1000, f"only {total} complaints stored"
+    total = _rows("SELECT count(*) FROM complaints WHERE is_synthetic IS TRUE")[0][0]
+    assert int(total) >= 1000, f"only {total} synthetic complaints stored"
 
 
 @requires_dataset
 def test_stored_category_distribution() -> None:
-    rows = _rows("SELECT category::text, count(*) FROM complaints GROUP BY 1")
+    rows = _rows(
+        "SELECT category::text, count(*) FROM complaints "
+        "WHERE is_synthetic IS TRUE GROUP BY 1"
+    )
     counts = {row[0]: int(row[1]) for row in rows}
     total = sum(counts.values())
 
@@ -217,7 +220,10 @@ def test_stored_category_distribution() -> None:
 
 @requires_dataset
 def test_stored_language_distribution() -> None:
-    rows = _rows("SELECT language::text, count(*) FROM complaints GROUP BY 1")
+    rows = _rows(
+        "SELECT language::text, count(*) FROM complaints "
+        "WHERE is_synthetic IS TRUE GROUP BY 1"
+    )
     counts = {row[0]: int(row[1]) for row in rows}
     total = sum(counts.values())
 
